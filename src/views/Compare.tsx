@@ -38,14 +38,14 @@ export function Compare({ onOpenVenue, onTab }: { onOpenVenue: (id: string) => v
   if (all.length === 0) {
     return (
       <div>
-        <PageHeader title="Compare" />
+        <PageHeader title="Confronto" />
         <Empty
           icon={<Columns3 className="size-6" />}
-          title="Nothing to compare yet"
-          body="Add a few venues and this grid lines them up item by item."
+          title="Ancora niente da confrontare"
+          body="Aggiungi qualche location e questa tabella le mette a confronto voce per voce."
           action={
             <Button variant="primary" onClick={() => onTab('venues')}>
-              <Plus className="size-4" /> Add venues
+              <Plus className="size-4" /> Aggiungi location
             </Button>
           }
         />
@@ -58,7 +58,7 @@ export function Compare({ onOpenVenue, onTab }: { onOpenVenue: (id: string) => v
 
   return (
     <div>
-      <PageHeader title="Compare" subtitle={`Side by side, worked out for ${guests} guests. Tap a venue name to edit it.`} />
+      <PageHeader title="Confronto" subtitle={`Fianco a fianco, calcolato per ${guests} invitati. Tocca il nome di una location per modificarla.`} />
 
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
@@ -91,22 +91,22 @@ export function Compare({ onOpenVenue, onTab }: { onOpenVenue: (id: string) => v
           value={filter}
           onChange={setFilter}
           options={[
-            { value: 'all', label: 'All items' },
-            { value: 'known', label: 'Answered' },
-            { value: 'diff', label: 'Differences' },
+            { value: 'all', label: 'Tutte le voci' },
+            { value: 'known', label: 'Con risposta' },
+            { value: 'diff', label: 'Differenze' },
           ]}
         />
       </div>
 
       {venues.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted">Tap a venue above to show it.</p>
+        <p className="py-10 text-center text-sm text-muted">Tocca una location qui sopra per mostrarla.</p>
       ) : (
         <div className="-mx-4 overflow-x-auto md:mx-0 md:rounded-2xl md:border md:border-line md:bg-surface md:shadow-card">
           <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
                 <th className="sticky top-0 left-0 z-20 w-36 min-w-36 border-b border-line bg-bg px-4 py-3 text-left align-bottom text-xs font-medium text-muted md:w-56 md:min-w-56 md:bg-surface">
-                  Item
+                  Voce
                 </th>
                 {venues.map((v) => (
                   <VenueHead key={v.id} venue={v} chosen={doc.settings.chosenVenueId === v.id} onOpen={() => onOpenVenue(v.id)} />
@@ -116,7 +116,7 @@ export function Compare({ onOpenVenue, onTab }: { onOpenVenue: (id: string) => v
             <tbody>
               {/* Totals */}
               <tr>
-                <RowHead className="bg-surface-2 font-semibold">Known cost</RowHead>
+                <RowHead className="bg-surface-2 font-semibold">Costo noto</RowHead>
                 {venues.map((v) => {
                   const s = summaries.get(v.id)!;
                   return (
@@ -125,20 +125,20 @@ export function Compare({ onOpenVenue, onTab }: { onOpenVenue: (id: string) => v
                         {money(s.known, cur)}
                       </div>
                       <div className="mt-0.5 text-[11px] leading-snug text-muted">
-                        {s.tax > 0 && <div>incl. {money(s.tax, cur)} tax</div>}
-                        {s.missing > 0 ? <div className="font-medium text-ext">{s.missing} price{s.missing === 1 ? '' : 's'} missing</div> : null}
+                        {s.tax > 0 && <div>di cui {money(s.tax, cur)} IVA/servizio</div>}
+                        {s.missing > 0 ? <div className="font-medium text-ext">{s.missing === 1 ? '1 prezzo mancante' : `${s.missing} prezzi mancanti`}</div> : null}
                       </div>
                     </td>
                   );
                 })}
               </tr>
               <tr>
-                <RowHead>Offer</RowHead>
+                <RowHead>Offerta</RowHead>
                 {venues.map((v) => {
                   const c = summaries.get(v.id)!.counts;
                   return (
                     <td key={v.id} className="border-b border-line px-3 py-2.5 text-[11px] leading-relaxed text-ink-2">
-                      <span className="text-inc">{c.included} incl.</span> · <span className="text-ext">{c.extra} extra</span> · <span className="text-na">{c.unavailable} n/a</span>
+                      <span className="text-inc">{c.included === 1 ? '1 incluso' : `${c.included} inclusi`}</span> · <span className="text-ext">{c.extra} extra</span> · <span className="text-na">{c.unavailable} no</span>
                       {c.unknown > 0 && <span className="text-muted"> · {c.unknown} ?</span>}
                     </td>
                   );
@@ -171,7 +171,7 @@ export function Compare({ onOpenVenue, onTab }: { onOpenVenue: (id: string) => v
                 <>
                   <tr>
                     <th colSpan={venues.length + 1} className="sticky left-0 border-b border-line bg-bg px-4 pt-5 pb-2 text-left text-[11px] font-semibold tracking-wider text-muted uppercase md:bg-surface">
-                      Availability
+                      Disponibilità
                     </th>
                   </tr>
                   {dates.map((d) => (
@@ -192,14 +192,14 @@ export function Compare({ onOpenVenue, onTab }: { onOpenVenue: (id: string) => v
 
               <tr>
                 <th colSpan={venues.length + 1} className="sticky left-0 border-b border-line bg-bg px-4 pt-5 pb-2 text-left text-[11px] font-semibold tracking-wider text-muted uppercase md:bg-surface">
-                  Terms
+                  Condizioni
                 </th>
               </tr>
               {(
                 [
-                  ['Deposit', 'deposit'],
-                  ['Payment schedule', 'paymentTerms'],
-                  ['Cancellation', 'cancellation'],
+                  ['Caparra', 'deposit'],
+                  ['Pagamenti', 'paymentTerms'],
+                  ['Disdetta', 'cancellation'],
                 ] as const
               ).map(([label, key]) => (
                 <tr key={key}>
@@ -246,7 +246,7 @@ function VenueHead({ venue, chosen, onOpen }: { venue: Venue; chosen: boolean; o
   return (
     <th className="sticky top-0 z-10 min-w-36 border-b border-line bg-bg px-3 py-3 text-left align-bottom font-normal md:min-w-40 md:bg-surface">
       <button onClick={onOpen} className="group text-left">
-        {chosen && <span className="mb-1 inline-block rounded-full bg-gold-soft px-1.5 py-px text-[10px] font-semibold text-gold">Our pick</span>}
+        {chosen && <span className="mb-1 inline-block rounded-full bg-gold-soft px-1.5 py-px text-[10px] font-semibold text-gold">La nostra scelta</span>}
         <div className="font-display text-[15px] leading-tight font-medium text-ink group-hover:underline">{venueName(venue)}</div>
         <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
           {venue.capacity != null && (
@@ -283,13 +283,13 @@ function OfferCell({ venue, item }: { venue: Venue; item: Item }) {
           line.total != null ? (
             <span className="font-medium tabular-nums">{money(line.total, doc.settings.currency)}</span>
           ) : (
-            <span className="text-xs text-ext">{line.missing === 'price' ? 'price?' : line.missing === 'qty' ? 'qty?' : 'tax?'}</span>
+            <span className="text-xs text-ext">{line.missing === 'price' ? 'prezzo?' : line.missing === 'qty' ? 'quantità?' : 'aliquota?'}</span>
           )
         ) : (
           <span className={cn('text-xs', st.fg)}>{o.status === 'unknown' ? '' : st.label}</span>
         )}
       </div>
-      {o.status === 'extra' && line.tax ? <div className="mt-0.5 pl-6 text-[11px] text-muted">incl. tax</div> : null}
+      {o.status === 'extra' && line.tax ? <div className="mt-0.5 pl-6 text-[11px] text-muted">IVA/serv. incl.</div> : null}
       {o.note && <div className="mt-0.5 line-clamp-2 max-w-40 pl-6 text-[11px] text-muted">{o.note}</div>}
     </td>
   );

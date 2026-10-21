@@ -12,10 +12,10 @@ import { cn, uid } from '@/lib/utils';
 import { TaxInput, venueName } from './Venues';
 
 const STATUS_OPTS: { value: CostStatus; label: string }[] = [
-  { value: 'todo', label: 'To find' },
-  { value: 'quoted', label: 'Quoted' },
-  { value: 'booked', label: 'Booked' },
-  { value: 'paid', label: 'Paid' },
+  { value: 'todo', label: 'Da trovare' },
+  { value: 'quoted', label: 'Preventivo' },
+  { value: 'booked', label: 'Prenotato' },
+  { value: 'paid', label: 'Pagato' },
 ];
 
 const STATUS_TONE: Record<CostStatus, string> = {
@@ -51,25 +51,25 @@ export function Budget({ onSettings }: { onSettings: () => void }) {
 
   return (
     <div>
-      <PageHeader title="Budget" subtitle="The whole wedding: your chosen venue plus everything else." />
+      <PageHeader title="Budget" subtitle="Tutto il matrimonio: la location scelta più tutto il resto." />
 
       <Card className="mb-8 p-5 md:p-6">
         <div className="grid gap-5 md:grid-cols-[1fr_1.4fr] md:gap-8">
           <div className="space-y-4">
-            <Field label="Total budget">
-              <AmountInput value={budget} currency={cur} onCommit={(b) => setSettings({ budget: b })} placeholder="Enter your budget" />
+            <Field label="Budget totale">
+              <AmountInput value={budget} currency={cur} onCommit={(b) => setSettings({ budget: b })} placeholder="Inserisci il budget" />
             </Field>
-            <Field label="Venue" hint={venues.length === 0 ? 'Add venues first' : vs && vs.missing > 0 ? `${vs.missing} venue price${vs.missing === 1 ? '' : 's'} still missing` : undefined}>
+            <Field label="Location" hint={venues.length === 0 ? 'Prima aggiungi le location' : vs && vs.missing > 0 ? (vs.missing === 1 ? 'Manca ancora 1 prezzo della location' : `Mancano ancora ${vs.missing} prezzi della location`) : undefined}>
               <Select
                 value={doc.settings.chosenVenueId ?? ''}
                 onChange={(id) => setSettings({ chosenVenueId: id || null })}
-                options={[{ value: '', label: 'Not chosen yet' }, ...venues.map((v) => ({ value: v.id, label: venueName(v) }))]}
+                options={[{ value: '', label: 'Non ancora scelta' }, ...venues.map((v) => ({ value: v.id, label: venueName(v) }))]}
               />
             </Field>
           </div>
 
           <div>
-            <div className="text-xs text-muted">{remaining == null ? 'Known costs so far' : remaining < 0 ? 'Over budget by' : venue ? 'Left to spend' : 'Left for the venue'}</div>
+            <div className="text-xs text-muted">{remaining == null ? 'Costi noti finora' : remaining < 0 ? 'Fuori budget di' : venue ? 'Ancora da spendere' : 'Rimasti per la location'}</div>
             <AnimatedNumber
               value={remaining == null ? committed : Math.abs(remaining)}
               format={(n) => money(n, cur)}
@@ -85,23 +85,23 @@ export function Budget({ onSettings }: { onSettings: () => void }) {
               <div>
                 <dt className="flex items-center gap-1.5 text-xs text-muted">
                   <span className="size-2 rounded-full bg-accent" />
-                  Venue
+                  Location
                 </dt>
                 <dd className="mt-0.5 font-medium tabular-nums">{venue ? money(vs!.known, cur) : '—'}</dd>
               </div>
               <div>
                 <dt className="flex items-center gap-1.5 text-xs text-muted">
                   <span className="size-2 rounded-full bg-gold" />
-                  Everything else
+                  Tutto il resto
                 </dt>
                 <dd className="mt-0.5 font-medium tabular-nums">{money(cs.known, cur)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted">Paid so far</dt>
+                <dt className="text-xs text-muted">Già pagato</dt>
                 <dd className="mt-0.5 font-medium tabular-nums">{money(cs.paid, cur)}</dd>
               </div>
             </dl>
-            {cs.missing > 0 && <p className="mt-3 text-xs text-ext">{cs.missing} item{cs.missing === 1 ? '' : 's'} below without a price yet, so the real total will be higher.</p>}
+            {cs.missing > 0 && <p className="mt-3 text-xs text-ext">{cs.missing === 1 ? '1 voce qui sotto non ha ancora un prezzo' : `${cs.missing} voci qui sotto non hanno ancora un prezzo`}: il totale reale sarà più alto.</p>}
           </div>
         </div>
       </Card>
@@ -128,9 +128,9 @@ export function Budget({ onSettings }: { onSettings: () => void }) {
       </div>
 
       <p className="mt-8 text-center text-xs text-muted">
-        Guests, currency and the venue checklist live in{' '}
+        Invitati, valuta e lista delle voci delle location sono nelle{' '}
         <button onClick={onSettings} className="underline underline-offset-2 hover:text-ink">
-          Settings
+          Impostazioni
         </button>
         .
       </p>
@@ -141,7 +141,7 @@ export function Budget({ onSettings }: { onSettings: () => void }) {
 function AddCostButton({ onAdd }: { onAdd: () => void }) {
   return (
     <button onClick={onAdd} className="flex w-full items-center gap-2 px-4 py-3 text-sm text-muted transition hover:bg-surface-2 hover:text-ink">
-      <Plus className="size-4" /> Add item
+      <Plus className="size-4" /> Aggiungi voce
     </button>
   );
 }
@@ -155,7 +155,7 @@ function CostRow({ cost, currency }: { cost: Cost; currency: string }) {
       <div className="flex items-center gap-2 px-4 py-2.5">
         <button onClick={() => setOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={open}>
           <ChevronDown className={cn('size-4 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
-          <span className={cn('truncate text-[15px]', !cost.name && 'text-muted italic')}>{cost.name || 'New item'}</span>
+          <span className={cn('truncate text-[15px]', !cost.name && 'text-muted italic')}>{cost.name || 'Nuova voce'}</span>
         </button>
         <span className={cn('hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline', STATUS_TONE[cost.status])}>{STATUS_OPTS.find((s) => s.value === cost.status)!.label}</span>
         <span className={cn('w-24 shrink-0 text-right tabular-nums', total == null ? 'text-muted' : 'font-medium')}>{total == null ? '—' : money(total, currency)}</span>
@@ -164,30 +164,30 @@ function CostRow({ cost, currency }: { cost: Cost; currency: string }) {
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
             <div className="grid grid-cols-2 gap-3 border-t border-line/60 bg-surface-2/40 px-4 pt-3 pb-4 sm:grid-cols-4">
-              <Field label="What" className="col-span-2">
-                <TextInput value={cost.name} onCommit={(name) => p({ name })} placeholder="e.g. Bride's shoes" autoFocus={!cost.name} />
+              <Field label="Cosa" className="col-span-2">
+                <TextInput value={cost.name} onCommit={(name) => p({ name })} placeholder="es. Scarpe della sposa" autoFocus={!cost.name} />
               </Field>
-              <Field label="Price" className="col-span-1">
+              <Field label="Prezzo" className="col-span-1">
                 <AmountInput value={cost.amount} currency={currency} onCommit={(amount) => p({ amount })} />
               </Field>
-              <Field label="Status" className="col-span-1">
+              <Field label="Stato" className="col-span-1">
                 <Select value={cost.status} onChange={(status) => p({ status })} options={STATUS_OPTS} />
               </Field>
-              <Field label="Service tax" className="col-span-2">
+              <Field label="IVA / servizio" className="col-span-2">
                 <TaxInput mode={cost.taxMode} value={cost.taxValue} currency={currency} onChange={(taxMode, taxValue) => p({ taxMode, taxValue })} />
               </Field>
-              <Field label="Paid so far" className="col-span-1">
+              <Field label="Già pagato" className="col-span-1">
                 <AmountInput value={cost.paid} currency={currency} onCommit={(paid) => p({ paid })} />
               </Field>
-              <Field label="Supplier" className="col-span-1">
+              <Field label="Fornitore" className="col-span-1">
                 <TextInput value={cost.vendor} onCommit={(vendor) => p({ vendor })} />
               </Field>
-              <Field label="Notes" className="col-span-2 sm:col-span-3">
+              <Field label="Note" className="col-span-2 sm:col-span-3">
                 <TextInput value={cost.note} onCommit={(note) => p({ note })} />
               </Field>
               <div className="col-span-2 flex items-end justify-between gap-2 sm:col-span-1">
                 <Select
-                  ariaLabel="Category"
+                  ariaLabel="Categoria"
                   value={cost.category}
                   onChange={(category) => p({ category })}
                   options={COST_CATEGORIES.map((c) => ({ value: c.id, label: c.label }))}
@@ -196,10 +196,10 @@ function CostRow({ cost, currency }: { cost: Cost; currency: string }) {
                   variant="danger"
                   size="sm"
                   className="size-10 shrink-0 px-0"
-                  aria-label="Delete item"
+                  aria-label="Elimina voce"
                   onClick={() => {
                     const name = getDoc().costs.find((c) => c.id === cost.id)?.name;
-                    if (!name || window.confirm(`Delete ${name}?`)) remove('costs', cost.id);
+                    if (!name || window.confirm(`Eliminare ${name}?`)) remove('costs', cost.id);
                   }}
                 >
                   <Trash2 className="size-4" />

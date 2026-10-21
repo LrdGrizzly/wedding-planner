@@ -103,25 +103,34 @@ export function getAvail(doc: Doc, venueId: string, dateId: string) {
 }
 
 export const AVAIL_LABEL: Record<AvailStatus, string> = {
-  unknown: 'Not asked',
-  available: 'Available',
-  held: 'On hold',
-  unavailable: 'Unavailable',
-  booked: 'Booked',
+  unknown: 'Da chiedere',
+  available: 'Disponibile',
+  held: 'In opzione',
+  unavailable: 'Occupata',
+  booked: 'Prenotata',
+};
+
+/** Short labels for tight segmented controls. */
+export const AVAIL_SHORT: Record<AvailStatus, string> = {
+  unknown: '?',
+  available: 'Libera',
+  held: 'Opzione',
+  unavailable: 'Occupata',
+  booked: 'Prenotata',
 };
 
 export const STATUS_LABEL: Record<ItemStatus, string> = {
-  unknown: 'Not asked',
-  included: 'Included',
-  extra: 'Extra cost',
-  unavailable: 'Not offered',
+  unknown: 'Da chiedere',
+  included: 'Incluso',
+  extra: 'A pagamento',
+  unavailable: 'Non previsto',
 };
 
 export const UNIT_LABEL: Record<Unit, string> = {
-  flat: 'flat',
-  perGuest: 'per guest',
-  perHour: 'per hour',
-  perItem: 'per item',
+  flat: 'forfait',
+  perGuest: 'a persona',
+  perHour: "all'ora",
+  perItem: 'a unità',
 };
 
 /** Days from today until a yyyy-mm-dd date (negative = past). */

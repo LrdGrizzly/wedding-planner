@@ -1,7 +1,8 @@
 {
-  "name": "Wedding Planner",
-  "short_name": "Wedding",
-  "description": "Compare venues, availability and your whole wedding budget.",
+  "name": "Il nostro matrimonio",
+  "short_name": "Matrimonio",
+  "description": "Confronta location, date libere e tutto il budget del matrimonio.",
+  "lang": "it",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -3,7 +3,7 @@ import { CalendarDays, Columns3, Home, Landmark, Settings as Gear, Wallet, Cloud
 import { motion } from 'motion/react';
 import { TransitionPanel } from '@/components/motion-primitives/transition-panel';
 import { cn } from '@/lib/utils';
-import { getDriveView, subscribeDrive, tapSync } from '@/lib/drive';
+import { getDriveView, subscribeDrive, syncAtBoundary, tapSync } from '@/lib/drive';
 import { Overview } from '@/views/Overview';
 import { Venues } from '@/views/Venues';
 import { Compare } from '@/views/Compare';
@@ -14,10 +14,10 @@ import { SettingsSheet } from '@/views/Settings';
 export type Tab = 'overview' | 'venues' | 'compare' | 'dates' | 'budget';
 
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
-  { id: 'overview', label: 'Overview', icon: Home },
-  { id: 'venues', label: 'Venues', icon: Landmark },
-  { id: 'compare', label: 'Compare', icon: Columns3 },
-  { id: 'dates', label: 'Dates', icon: CalendarDays },
+  { id: 'overview', label: 'Riepilogo', icon: Home },
+  { id: 'venues', label: 'Location', icon: Landmark },
+  { id: 'compare', label: 'Confronto', icon: Columns3 },
+  { id: 'dates', label: 'Date', icon: CalendarDays },
   { id: 'budget', label: 'Budget', icon: Wallet },
 ];
 
@@ -36,6 +36,8 @@ export default function App() {
   const [openVenue, setOpenVenue] = useState<string | null>(null);
 
   const setTab = (t: Tab) => {
+    // Switching section is a natural pause: renew Google access inside this tap and sync
+    syncAtBoundary();
     setTabState(t);
     history.replaceState(null, '', `#${t}`);
     window.scrollTo({ top: 0 });
@@ -59,9 +61,9 @@ export default function App() {
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 md:h-16 md:px-6">
           <div className="flex items-center gap-2.5">
             <img src="./icon.svg" alt="" className="size-7 md:size-8" />
-            <span className="font-display text-lg font-medium tracking-tight md:text-xl">Wedding Planner</span>
+            <span className="font-display text-lg font-medium tracking-tight md:text-xl">Il nostro matrimonio</span>
           </div>
-          <nav className="mx-auto hidden md:block" aria-label="Sections">
+          <nav className="mx-auto hidden md:block" aria-label="Sezioni">
             <div className="flex rounded-full bg-surface-2 p-1">
               {TABS.map((t) => (
                 <button
@@ -79,9 +81,12 @@ export default function App() {
           <div className="ml-auto flex items-center gap-1 md:ml-0">
             <SyncChip onSetup={() => setSettingsOpen(true)} />
             <button
-              aria-label="Settings"
-              title="Settings"
-              onClick={() => setSettingsOpen(true)}
+              aria-label="Impostazioni"
+              title="Impostazioni"
+              onClick={() => {
+                syncAtBoundary();
+                setSettingsOpen(true);
+              }}
               className="inline-flex size-10 items-center justify-center rounded-full text-ink-2 transition hover:bg-surface-2 hover:text-ink"
             >
               <Gear className="size-5" />
@@ -111,7 +116,7 @@ export default function App() {
       </main>
 
       {/* Phone tab bar */}
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/92 backdrop-blur-md md:hidden" aria-label="Sections">
+      <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/92 backdrop-blur-md md:hidden" aria-label="Sezioni">
         <div className="mx-auto grid max-w-md grid-cols-5 px-2 pt-1.5 pb-1">
           {TABS.map((t) => {
             const Icon = t.icon;
@@ -140,38 +145,44 @@ export default function App() {
 function SyncChip({ onSetup }: { onSetup: () => void }) {
   const d = useDrive();
   let icon = <CloudOff className="size-4" />;
-  let label = 'On this device';
+  let label = 'Solo sul dispositivo';
   let tone = 'text-muted';
   let action: () => void = onSetup;
 
   switch (d.status) {
     case 'synced':
       icon = <Cloud className="size-4" />;
-      label = 'Synced';
+      label = 'Sincronizzato';
       tone = 'text-inc';
       action = () => tapSync();
       break;
     case 'syncing':
     case 'connecting':
       icon = <RefreshCw className="size-4 animate-spin" />;
-      label = 'Syncing';
+      label = 'Sincronizzo…';
       tone = 'text-ink-2';
       action = () => {};
       break;
     case 'expired':
       icon = <RefreshCw className="size-4" />;
-      label = 'Tap to sync';
+      label = 'Tocca per sincronizzare';
       tone = 'text-ext';
       action = () => tapSync();
       break;
     case 'error':
       icon = <AlertCircle className="size-4" />;
-      label = 'Sync issue';
+      label = 'Errore di sync';
       tone = 'text-na';
+      break;
+    case 'offline':
+      icon = <CloudOff className="size-4" />;
+      label = 'Offline';
+      tone = 'text-muted';
+      action = () => tapSync();
       break;
     case 'needsFile':
       icon = <AlertCircle className="size-4" />;
-      label = 'Choose file';
+      label = 'Scegli il file';
       tone = 'text-ext';
       break;
   }

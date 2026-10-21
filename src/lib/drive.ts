@@ -1,29 +1,43 @@
 /* ═══════════════════════════════════════════
-   GOOGLE DRIVE SYNC  (v2 of the workout-tracker technique)
+   GOOGLE DRIVE SYNC  (v3 of the workout-tracker technique)
 
-   Same foundations as the workout tracker:
+   v1 (workout tracker) foundations, all kept:
    - Local-first: everything is saved in localStorage; Drive is the sync layer.
    - Google Identity Services token client, Client ID entered at runtime in
      Settings (no source edit, nothing secret in the repo).
-   - Token cached with its expiry, silent renewal (prompt:'') before it
-     lapses, and renewal from inside a tap when the browser blocks it.
-   - Background sync on an interval, on returning to the tab, and on reconnect.
+   - Token cached with its expiry; silent renewal (prompt:'') 5 min before
+     it lapses; the token client is preloaded so a tap can renew it.
 
-   What v2 changes:
-   - drive.file scope + a visible file in My Drive instead of the hidden
-     appDataFolder. appDataFolder is private to one Google account, so two
-     people could never share it; a normal file can be shared, and you can
-     see and back it up in Drive.
-   - Partner access: the owner shares the file from inside the app; the
-     partner opens it once through the Google Picker, which grants this app
-     access to that one file.
-   - One JSON document, merged record by record (newest edit wins, deletions
-     kept as tombstones) instead of whole-file "last device wins".
-   - Cheap change check: compares the file's Drive `version` before
-     downloading, so frequent polling costs one tiny request.
-   - Edits push automatically a couple of seconds after you stop typing.
-   - login_hint with the remembered account, so silent renewal picks the
-     right Google account when several are signed in.
+   v1 AUTO SYNC, ported in full (v3):
+   - Periodic background sync; if the token is about to lapse it is
+     silently renewed first, then the sync runs (was: skipped).
+   - Returning to the app (visibilitychange): renew if needed, then sync.
+   - Boundary syncs: mobile browsers freeze timers and the 1-hour token is
+     usually dead by the next visit, and Google only renews silently from
+     inside a user tap. So natural "boundary" taps (switching tab, opening or
+     closing a venue / panel) renew the token *inside the tap* and sync.
+     syncAtBoundary() must be called synchronously from the click handler.
+   - Automatic reconnect on load: restore a valid cached token, or try a
+     silent renewal.
+
+   Added in v2:
+   - drive.file scope + a visible, shareable file in My Drive instead of the
+     hidden appDataFolder (private to one Google account, so a partner could
+     never share it).
+   - Partner access: owner shares from the app; partner opens the file once
+     via the Google Picker, which grants this app access to that file.
+   - Record-level merge (newest edit wins, deletions kept as tombstones)
+     instead of whole-file "last device wins".
+   - Cheap change check on the Drive `version` before downloading.
+   - Edits push automatically ~2 s after you stop typing.
+   - login_hint with the remembered account for silent renewal.
+
+   Added in v3:
+   - Retry with backoff (15 s → 5 min) after network / server errors.
+   - Flush on leave: unsynced edits are pushed with `keepalive` when the
+     app is hidden or closed, so they survive the tab being killed.
+   - Silent renewals outside a tap are rate-limited so a browser that
+     blocks them doesn't get hammered.
 ═══════════════════════════════════════════ */
 
 import { fingerprint, getDoc, isDirty, markClean, mergeDocs, normalize, onLocalChange, replaceDoc } from './store';
@@ -37,11 +51,20 @@ declare global {
 }
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const FILE_NAME = 'Wedding Planner.json';
+const FILE_NAME = 'Organizzatore Matrimonio.json';
+const PICKER_QUERY = 'Organizzatore Matrimonio';
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
-const POLL_MS = 60 * 1000;
-const PUSH_DELAY_MS = 2000;
+
+const AUTO = {
+  pollMs: 60 * 1000, // background sync while the app is open
+  pushDelayMs: 2000, // after the last edit
+  renewBeforeMs: 2 * 60 * 1000, // treat the token as stale this long before expiry
+  boundaryThrottleMs: 30 * 1000, // min gap between boundary syncs when nothing changed
+  silentRetryMs: 2 * 60 * 1000, // min gap between silent renewals outside a tap
+  backoffMs: [15, 30, 60, 120, 300].map((s) => s * 1000),
+  keepaliveMaxBytes: 60 * 1024, // fetch keepalive bodies are capped at 64 KB
+};
 
 const K = {
   cfg: 'wp_drive_cfg',
@@ -51,6 +74,29 @@ const K = {
   version: 'wp_drive_version',
   lastSync: 'wp_drive_last_sync',
 };
+
+const MSG = {
+  expired: 'Accesso a Google scaduto. Tocca per riconnetterti.',
+  tapToSync: 'Tocca per sincronizzare con Google Drive.',
+  pending: 'Modifiche da sincronizzare: tocca per inviarle.',
+  cancelled: 'Accesso a Google annullato o bloccato. Riprova.',
+  offline: 'Sei offline. Le modifiche sono salvate su questo dispositivo.',
+  failed: 'Sincronizzazione non riuscita. Le modifiche sono salvate su questo dispositivo.',
+  gone: 'Il file non è più disponibile su Drive.',
+  noGoogle: 'Impossibile raggiungere Google. Le modifiche sono salvate su questo dispositivo.',
+  needPickerKeys: 'Aggiungi chiave API e numero di progetto nella configurazione di Drive per aprire un file condiviso.',
+  badPick: 'Impossibile aprire il file. Controlla che sia stato condiviso con questo account Google.',
+  notSignedIn: 'Accesso non effettuato',
+  createFailed: 'Impossibile creare il file su Drive. Riprova.',
+  pickerFailed: 'Impossibile aprire il selettore di Google Drive.',
+  shareFailed: "Condivisione non riuscita. Controlla l'indirizzo email e riprova.",
+};
+
+/** Google's error texts are English: log the detail, show Italian. */
+function fail(e: unknown, message: string, status: DriveStatus | null = 'error') {
+  console.warn('[Drive]', (e as Error)?.message || e);
+  set(status ? { status, message } : { message });
+}
 
 export interface DriveConfig {
   clientId: string;
@@ -66,6 +112,7 @@ export type DriveStatus =
   | 'syncing'
   | 'synced'
   | 'expired' // token lapsed and needs a tap to renew
+  | 'offline'
   | 'error';
 
 export interface DriveView {
@@ -74,6 +121,7 @@ export interface DriveView {
   lastSync: number | null;
   user: { email: string; name: string } | null;
   file: { id: string; name: string; ownedByMe: boolean } | null;
+  /** '' unknown, 'me' this account, otherwise the other person's name */
   lastEditor: string;
 }
 
@@ -133,8 +181,12 @@ let tokenClientHint = '';
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryStep = 0;
+let lastSilentAttempt = 0;
+let lastBoundarySync = 0;
 
-const tokenFresh = () => !!token && expiry - Date.now() > 2 * 60 * 1000;
+const tokenFresh = () => !!token && expiry - Date.now() > AUTO.renewBeforeMs;
 
 function loadScript(src: string, ready: () => boolean): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -205,9 +257,9 @@ function ensureTokenClient(): boolean {
 }
 
 /**
- * Ask Google for a token. Must be called synchronously from a tap when
- * interactive: nothing may be awaited before requestAccessToken, or mobile
- * browsers block the popup. That is why GIS is preloaded at startup.
+ * Ask Google for a token. When called from a tap, nothing may be awaited
+ * before this runs, or mobile browsers block it. That is why GIS is
+ * preloaded at startup. `interactive` allows the account/consent popup.
  */
 function requestToken(interactive: boolean): Promise<boolean> {
   if (!ensureTokenClient()) return Promise.resolve(false);
@@ -224,12 +276,21 @@ function requestToken(interactive: boolean): Promise<boolean> {
   return Promise.race([p, timeout]);
 }
 
+/** Silent renewal outside a tap: rate-limited, since browsers may block it. */
+function silentRenew(): Promise<boolean> {
+  if (tokenFresh()) return Promise.resolve(true);
+  if (Date.now() - lastSilentAttempt < AUTO.silentRetryMs) return Promise.resolve(false);
+  lastSilentAttempt = Date.now();
+  return requestToken(false);
+}
+
 function scheduleRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer);
   const delay = Math.max(expiry - Date.now() - 5 * 60 * 1000, 10000);
   refreshTimer = setTimeout(async () => {
-    if (await requestToken(false)) return;
-    if (view.file) set({ status: 'expired', message: 'Google sign-in expired. Tap to reconnect.' });
+    lastSilentAttempt = 0; // this one is planned, always allowed
+    if (await silentRenew()) return;
+    if (view.file) set({ status: 'expired', message: MSG.expired });
   }, delay);
 }
 
@@ -244,10 +305,10 @@ class DriveError extends Error {
 }
 
 async function api(url: string, init: RequestInit = {}): Promise<Response> {
-  if (!token) throw new DriveError('Not signed in', 401);
+  if (!token) throw new DriveError(MSG.notSignedIn, 401);
   const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) } });
   if (!res.ok) {
-    let msg = `Drive error ${res.status}`;
+    let msg = `Errore Drive ${res.status}`;
     try {
       const body = await res.json();
       msg = body?.error?.message || msg;
@@ -307,11 +368,12 @@ async function download(id: string): Promise<Doc> {
   return normalize(await res.json());
 }
 
-async function upload(id: string, d: Doc): Promise<string> {
+async function upload(id: string, d: Doc, keepalive = false): Promise<string> {
   const res = await json<{ version: string }>(`${UPLOAD}/files/${id}?uploadType=media&fields=version`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(d),
+    keepalive,
   });
   return res.version;
 }
@@ -320,19 +382,37 @@ async function upload(id: string, d: Doc): Promise<string> {
 let syncing = false;
 let again = false;
 
-/** Pull → merge → push. Safe to call often; concurrent calls coalesce. */
+function scheduleRetry() {
+  if (retryTimer) clearTimeout(retryTimer);
+  const delay = AUTO.backoffMs[Math.min(retryStep, AUTO.backoffMs.length - 1)];
+  retryStep++;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    autoSync();
+  }, delay);
+}
+
+function resetRetry() {
+  retryStep = 0;
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
+}
+
+/** Pull → merge → push. Needs a fresh token; concurrent calls coalesce. */
 export async function syncNow(): Promise<boolean> {
   const file = view.file;
-  if (!file || !navigator.onLine) return false;
+  if (!file) return false;
+  if (!navigator.onLine) {
+    set({ status: 'offline', message: MSG.offline });
+    return false;
+  }
   if (syncing) {
     again = true;
     return true;
   }
-  if (!tokenFresh()) {
-    if (!(await requestToken(false))) {
-      set({ status: 'expired', message: 'Google sign-in expired. Tap to reconnect.' });
-      return false;
-    }
+  if (!tokenFresh() && !(await silentRenew())) {
+    set({ status: 'expired', message: isDirty() ? MSG.pending : MSG.expired });
+    return false;
   }
   syncing = true;
   set({ status: 'syncing', message: '' });
@@ -341,12 +421,13 @@ export async function syncNow(): Promise<boolean> {
     if (!meta) {
       write(K.file, null);
       write(K.version, null);
-      set({ file: null, status: 'needsFile', message: 'The planner file is no longer available in Drive.' });
+      set({ file: null, status: 'needsFile', message: MSG.gone });
       return false;
     }
     const known = read<string>(K.version);
     const local = getDoc();
     let needPush = isDirty();
+    let editor = meta.lastModifyingUser?.me ? 'me' : meta.lastModifyingUser?.displayName || '';
     if (meta.version !== known) {
       const remote = await download(file.id);
       const merged = mergeDocs(local, remote);
@@ -366,19 +447,22 @@ export async function syncNow(): Promise<boolean> {
       const version = await upload(file.id, before);
       write(K.version, version);
       if (getDoc() === before) markClean();
+      editor = 'me';
     }
     const now = Date.now();
     write(K.lastSync, now);
-    const editor = meta.lastModifyingUser?.me ? 'you' : meta.lastModifyingUser?.displayName || '';
+    resetRetry();
     set({ status: 'synced', message: '', lastSync: now, lastEditor: editor });
     return true;
   } catch (e) {
     if (e instanceof DriveError && e.status === 401) {
       token = null;
       write(K.token, null);
-      set({ status: 'expired', message: 'Google sign-in expired. Tap to reconnect.' });
+      set({ status: 'expired', message: MSG.expired });
     } else {
-      set({ status: 'error', message: (e as Error).message || 'Sync failed. Your changes are saved on this device.' });
+      // Network hiccup, quota, 5xx: keep the data local and try again later
+      fail(e, MSG.failed);
+      scheduleRetry();
     }
     return false;
   } finally {
@@ -390,18 +474,75 @@ export async function syncNow(): Promise<boolean> {
   }
 }
 
+/** Background sync: renews the token silently if needed, never prompts. */
+async function autoSync() {
+  if (!view.file || syncing) return;
+  if (!navigator.onLine) {
+    set({ status: 'offline', message: MSG.offline });
+    return;
+  }
+  if (!tokenFresh() && !(await silentRenew())) {
+    if (view.status !== 'expired') set({ status: 'expired', message: isDirty() ? MSG.pending : MSG.tapToSync });
+    return;
+  }
+  await syncNow();
+}
+
+/**
+ * Boundary sync, ported from the workout tracker's session-boundary sync.
+ * Call it SYNCHRONOUSLY at the top of a click handler for a natural pause
+ * point (tab switch, opening/closing a venue or panel): if the token has
+ * lapsed it is renewed inside the tap, where browsers allow it, then synced.
+ */
+export function syncAtBoundary() {
+  if (!view.file || !getConfig().clientId || !navigator.onLine) return;
+  if (!isDirty() && Date.now() - lastBoundarySync < AUTO.boundaryThrottleMs) return;
+  lastBoundarySync = Date.now();
+  if (tokenFresh()) {
+    syncNow();
+    return;
+  }
+  if (!ensureTokenClient()) return;
+  // No await before this: it must run inside the user's tap
+  requestToken(false).then((ok) => {
+    if (ok) {
+      startBackground();
+      syncNow();
+    } else if (view.status !== 'expired') {
+      set({ status: 'expired', message: isDirty() ? MSG.pending : MSG.tapToSync });
+    }
+  });
+}
+
+/** Leaving the app: push unsynced edits with keepalive so they survive the tab closing. */
+function flushOnLeave() {
+  const file = view.file;
+  if (!file || !isDirty() || !tokenFresh() || syncing) return;
+  const d = getDoc();
+  const body = JSON.stringify(d);
+  if (body.length > AUTO.keepaliveMaxBytes) {
+    syncNow();
+    return;
+  }
+  upload(file.id, d, true)
+    .then((version) => {
+      write(K.version, version);
+      if (getDoc() === d) markClean();
+    })
+    .catch(() => {});
+}
+
 function startBackground() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(() => {
-    if (document.visibilityState === 'visible' && view.file && tokenFresh()) syncNow();
-  }, POLL_MS);
+    if (document.visibilityState === 'visible') autoSync();
+  }, AUTO.pollMs);
 }
 
 function stopBackground() {
+  for (const t of [refreshTimer, pushTimer, retryTimer]) if (t) clearTimeout(t);
   if (pollTimer) clearInterval(pollTimer);
-  if (refreshTimer) clearTimeout(refreshTimer);
-  if (pushTimer) clearTimeout(pushTimer);
-  pollTimer = refreshTimer = pushTimer = null;
+  pollTimer = refreshTimer = pushTimer = retryTimer = null;
 }
 
 /** After a token is in hand: who am I, which file, then sync. */
@@ -421,7 +562,8 @@ async function afterSignIn() {
     startBackground();
     await syncNow();
   } catch (e) {
-    set({ status: 'error', message: (e as Error).message });
+    fail(e, MSG.failed);
+    scheduleRetry();
   }
 }
 
@@ -435,7 +577,7 @@ export function connect(): Promise<void> {
   }
   const go = async (ok: boolean) => {
     if (!ok) {
-      set({ status: view.file ? 'expired' : 'disconnected', message: 'Google sign-in was cancelled or blocked. Try again.' });
+      set({ status: view.file ? 'expired' : 'disconnected', message: MSG.cancelled });
       return;
     }
     await afterSignIn();
@@ -446,13 +588,14 @@ export function connect(): Promise<void> {
   return loadGIS().then(() => requestToken(true).then(go));
 }
 
-/** "Sync now" / tapping the status chip: renews the token inside the tap if needed. */
+/** "Sincronizza ora" / tapping the status chip: renews the token inside the tap if needed. */
 export function tapSync(): Promise<boolean> {
+  lastBoundarySync = Date.now();
   if (tokenFresh()) return syncNow();
   if (!ensureTokenClient()) return Promise.resolve(false);
   return requestToken(true).then(async (ok) => {
     if (!ok) {
-      set({ status: 'expired', message: 'Google sign-in was cancelled. Tap to try again.' });
+      set({ status: 'expired', message: MSG.cancelled });
       return false;
     }
     if (!view.file) {
@@ -471,7 +614,7 @@ export async function createFile(): Promise<void> {
     const metadata = {
       name: FILE_NAME,
       mimeType: 'application/json',
-      description: 'Data for the Wedding Planner app. Edit it from the app, not by hand.',
+      description: "Dati dell'app Organizzatore Matrimonio. Modificalo dall'app, non a mano.",
     };
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -483,9 +626,9 @@ export async function createFile(): Promise<void> {
     startBackground();
     const now = Date.now();
     write(K.lastSync, now);
-    set({ status: 'synced', lastSync: now, lastEditor: 'you' });
+    set({ status: 'synced', lastSync: now, lastEditor: 'me' });
   } catch (e) {
-    set({ status: 'error', message: (e as Error).message });
+    fail(e, MSG.createFailed);
   }
 }
 
@@ -493,22 +636,23 @@ export async function createFile(): Promise<void> {
 export async function pickSharedFile(): Promise<void> {
   const cfg = getConfig();
   if (!cfg.apiKey || !cfg.projectNumber) {
-    set({ message: 'Add the API key and project number in Drive setup to open a shared file.' });
+    set({ message: MSG.needPickerKeys });
     return;
   }
   if (!tokenFresh() && !(await requestToken(true))) return;
   try {
     await loadPicker();
   } catch (e) {
-    set({ status: 'error', message: (e as Error).message });
+    fail(e, MSG.pickerFailed, null);
     return;
   }
   const g = window.google;
-  const shared = new g.picker.DocsView(g.picker.ViewId.DOCS).setMimeTypes('application/json').setOwnedByMe(false).setQuery('Wedding Planner');
-  const mine = new g.picker.DocsView(g.picker.ViewId.DOCS).setMimeTypes('application/json').setQuery('Wedding Planner');
+  const shared = new g.picker.DocsView(g.picker.ViewId.DOCS).setMimeTypes('application/json').setOwnedByMe(false).setQuery(PICKER_QUERY);
+  const mine = new g.picker.DocsView(g.picker.ViewId.DOCS).setMimeTypes('application/json').setQuery(PICKER_QUERY);
   await new Promise<void>((resolve) => {
     const picker = new g.picker.PickerBuilder()
-      .setTitle('Choose the Wedding Planner file')
+      .setLocale('it')
+      .setTitle('Scegli il file Organizzatore Matrimonio')
       .setOAuthToken(token)
       .setDeveloperKey(cfg.apiKey)
       .setAppId(cfg.projectNumber)
@@ -523,7 +667,7 @@ export async function pickSharedFile(): Promise<void> {
         if (!id) return;
         const meta = await getMeta(id).catch(() => null);
         if (!meta) {
-          set({ status: 'error', message: 'Could not open that file. Check it was shared with this Google account.' });
+          set({ status: 'error', message: MSG.badPick });
           return;
         }
         write(K.version, null); // force a full download + merge
@@ -542,14 +686,15 @@ export async function shareWith(email: string): Promise<boolean> {
   if (!file) return false;
   try {
     if (!tokenFresh() && !(await requestToken(true))) return false;
-    await api(`${API}/files/${file.id}/permissions?sendNotificationEmail=true&emailMessage=${encodeURIComponent('Our wedding planner. Open the app, connect Google Drive and choose "Open shared planner".')}`, {
+    const note = 'Il nostro organizzatore del matrimonio. Apri l\'app, collega Google Drive e scegli "Apri un file condiviso con me".';
+    await api(`${API}/files/${file.id}/permissions?sendNotificationEmail=true&emailMessage=${encodeURIComponent(note)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'user', role: 'writer', emailAddress: email.trim() }),
     });
     return true;
   } catch (e) {
-    set({ message: (e as Error).message });
+    fail(e, MSG.shareFailed, null);
     return false;
   }
 }
@@ -569,6 +714,7 @@ export async function listSharedWith(): Promise<string[]> {
 
 export function disconnect() {
   stopBackground();
+  resetRetry();
   if (token && window.google?.accounts?.oauth2) window.google.accounts.oauth2.revoke(token, () => {});
   token = null;
   expiry = 0;
@@ -590,7 +736,9 @@ export function saveConfig(cfg: DriveConfig) {
     write(K.token, null);
   }
   if (clean.clientId) {
-    loadGIS().catch(() => {});
+    loadGIS()
+      .then(() => ensureTokenClient())
+      .catch(() => {});
     if (view.status === 'unconfigured') set({ status: 'disconnected' });
   } else {
     disconnect();
@@ -598,54 +746,62 @@ export function saveConfig(cfg: DriveConfig) {
 }
 
 // ── startup ────────────────────────────────
+let listenersWired = false;
+
 export function initDrive() {
   const cfg = getConfig();
   if (!cfg.clientId) {
     set({ status: 'unconfigured' });
-    return;
-  }
-  // Preload GIS so a later tap can request a token without awaiting anything
-  loadGIS()
-    .then(() => {
-      ensureTokenClient();
-      if (cfg.apiKey) loadPicker().catch(() => {});
-    })
-    .catch(() => set({ status: 'error', message: 'Could not reach Google. Your changes are saved on this device.' }));
-
-  const saved = read<{ token: string; expiry: number }>(K.token);
-  if (saved && saved.expiry - Date.now() > 60000) {
-    token = saved.token;
-    expiry = saved.expiry;
-    scheduleRefresh();
-    afterSignIn();
-  } else if (view.file) {
-    // Was connected before: try a silent renewal; if the browser needs a tap, say so
-    set({ status: 'expired', message: 'Tap to sync with Google Drive.' });
-    loadGIS()
-      .then(() => requestToken(false))
-      .then((ok) => {
-        if (ok) afterSignIn();
-      })
-      .catch(() => {});
   } else {
-    set({ status: 'disconnected' });
+    // Preload GIS so a later tap can request a token without awaiting anything
+    loadGIS()
+      .then(() => {
+        ensureTokenClient();
+        if (cfg.apiKey) loadPicker().catch(() => {});
+      })
+      .catch(() => set({ status: 'error', message: MSG.noGoogle }));
+
+    // Automatic reconnect on load
+    const saved = read<{ token: string; expiry: number }>(K.token);
+    if (saved && saved.expiry - Date.now() > AUTO.renewBeforeMs) {
+      token = saved.token;
+      expiry = saved.expiry;
+      scheduleRefresh();
+      afterSignIn();
+    } else if (view.file) {
+      set({ status: 'expired', message: MSG.tapToSync });
+      loadGIS()
+        .then(() => silentRenew())
+        .then((ok) => {
+          if (ok) afterSignIn();
+        })
+        .catch(() => {});
+    } else {
+      set({ status: 'disconnected' });
+    }
   }
 
+  if (listenersWired) return;
+  listenersWired = true;
+
+  // Edits push automatically shortly after you stop
   onLocalChange(() => {
     if (!view.file) return;
     if (pushTimer) clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => {
-      if (tokenFresh()) syncNow();
-      else if (view.status !== 'expired') set({ status: 'expired', message: 'Tap to sync your latest changes.' });
-    }, PUSH_DELAY_MS);
+    pushTimer = setTimeout(autoSync, AUTO.pushDelayMs);
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && view.file && tokenFresh()) syncNow();
-    // Leaving the app with unsynced edits: push them now
-    if (document.visibilityState === 'hidden' && view.file && tokenFresh() && isDirty()) syncNow();
+    if (!view.file) return;
+    if (document.visibilityState === 'visible') autoSync();
+    else flushOnLeave();
   });
+  window.addEventListener('pagehide', flushOnLeave);
   window.addEventListener('online', () => {
-    if (view.file && tokenFresh()) syncNow();
+    resetRetry();
+    autoSync();
+  });
+  window.addEventListener('offline', () => {
+    if (view.file) set({ status: 'offline', message: MSG.offline });
   });
 }

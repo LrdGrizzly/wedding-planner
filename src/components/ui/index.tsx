@@ -3,7 +3,8 @@ import { Ban, Check, CircleHelp, Coins, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { parseAmount, currencySymbol } from '@/lib/format';
+import { syncAtBoundary } from '@/lib/drive';
+import { parseAmount, currencySymbol, LOCALE } from '@/lib/format';
 import type { ItemStatus } from '@/lib/types';
 
 // ── Buttons ────────────────────────────────
@@ -160,7 +161,8 @@ export function AmountInput({
   className?: string;
   ariaLabel?: string;
 }) {
-  const show = (v: number | null) => (v == null ? '' : String(v));
+  // Shown the Italian way (comma decimals, no grouping while editing)
+  const show = (v: number | null) => (v == null ? '' : v.toLocaleString(LOCALE, { useGrouping: false, maximumFractionDigits: 2 }));
   const [draft, setDraft] = useState(show(value));
   useEffect(() => setDraft(show(value)), [value]);
   const commit = () => {
@@ -272,10 +274,10 @@ export function Segmented<T extends string>({
 
 // ── Item status ────────────────────────────
 export const STATUS_STYLE: Record<ItemStatus, { fg: string; bg: string; icon: typeof Check; label: string; short: string }> = {
-  included: { fg: 'text-inc', bg: 'bg-inc-bg', icon: Check, label: 'Included', short: 'Incl.' },
-  extra: { fg: 'text-ext', bg: 'bg-ext-bg', icon: Coins, label: 'Extra cost', short: 'Extra' },
-  unavailable: { fg: 'text-na', bg: 'bg-na-bg', icon: Ban, label: 'Not offered', short: 'N/A' },
-  unknown: { fg: 'text-unk', bg: 'bg-unk-bg', icon: CircleHelp, label: 'Not asked', short: '?' },
+  included: { fg: 'text-inc', bg: 'bg-inc-bg', icon: Check, label: 'Incluso', short: 'Incluso' },
+  extra: { fg: 'text-ext', bg: 'bg-ext-bg', icon: Coins, label: 'A pagamento', short: 'Extra' },
+  unavailable: { fg: 'text-na', bg: 'bg-na-bg', icon: Ban, label: 'Non previsto', short: "Non c'è" },
+  unknown: { fg: 'text-unk', bg: 'bg-unk-bg', icon: CircleHelp, label: 'Da chiedere', short: '?' },
 };
 
 export function StatusPill({ status, className, compact }: { status: ItemStatus; className?: string; compact?: boolean }) {
@@ -294,7 +296,7 @@ export function StatusPicker({ value, onChange }: { value: ItemStatus; onChange:
   return (
     <Segmented
       size="sm"
-      ariaLabel="What the venue offers"
+      ariaLabel="Cosa offre la location"
       value={value}
       onChange={onChange}
       className="min-w-0 flex-1 sm:flex-none"
@@ -309,14 +311,12 @@ export function StatusPicker({ value, onChange }: { value: ItemStatus; onChange:
             <span className={cn('inline-flex items-center gap-1', value === st && s.fg)}>
               <Icon className="size-3.5 shrink-0" strokeWidth={2.25} />
               {st === 'unknown' ? (
-                <span className="hidden sm:inline">Not asked</span>
-              ) : st === 'extra' ? (
-                <>
-                  <span className="sm:hidden">Extra</span>
-                  <span className="hidden sm:inline">Extra cost</span>
-                </>
+                <span className="hidden sm:inline">{s.label}</span>
               ) : (
-                <span>{s.label}</span>
+                <>
+                  <span className="sm:hidden">{s.short}</span>
+                  <span className="hidden sm:inline">{s.label}</span>
+                </>
               )}
             </span>
           ),
@@ -347,6 +347,11 @@ export function Sheet({
   const [desktop, setDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches);
   const panelRef = useRef<HTMLDivElement>(null);
   const drag = useDragControls();
+  // Closing a panel is a natural pause: renew Google access inside this gesture and sync
+  const close = () => {
+    syncAtBoundary();
+    onClose();
+  };
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
     const on = () => setDesktop(mq.matches);
@@ -355,7 +360,7 @@ export function Sheet({
   }, []);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -376,7 +381,7 @@ export function Sheet({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={close}
           />
           <motion.div
             ref={panelRef}
@@ -399,7 +404,7 @@ export function Sheet({
             dragListener={false}
             dragControls={drag}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+              if (info.offset.y > 120 || info.velocity.y > 600) close();
             }}
           >
             {!desktop && (
@@ -412,7 +417,7 @@ export function Sheet({
                 <div className="font-display text-2xl leading-tight font-medium tracking-tight">{title}</div>
                 {subtitle && <div className="mt-1 text-sm text-muted">{subtitle}</div>}
               </div>
-              <IconButton label="Close" onClick={onClose} className="-mt-1 -mr-2">
+              <IconButton label="Chiudi" onClick={close} className="-mt-1 -mr-2">
                 <X className="size-5" />
               </IconButton>
             </div>
@@ -434,13 +439,13 @@ export function useConfirm() {
 export function Stars({ value, onChange, size = 'md' }: { value: number | null; onChange?: (v: number | null) => void; size?: 'sm' | 'md' }) {
   const n = value ?? 0;
   return (
-    <div className="inline-flex items-center" role={onChange ? 'radiogroup' : undefined} aria-label="Rating">
+    <div className="inline-flex items-center" role={onChange ? 'radiogroup' : undefined} aria-label="Valutazione">
       {[1, 2, 3, 4, 5].map((i) => (
         <button
           key={i}
           type="button"
           disabled={!onChange}
-          aria-label={`${i} star${i > 1 ? 's' : ''}`}
+          aria-label={`${i} stell${i > 1 ? 'e' : 'a'}`}
           onClick={() => onChange?.(value === i ? null : i)}
           className={cn('disabled:cursor-default', size === 'md' ? 'p-1' : 'p-0')}
         >

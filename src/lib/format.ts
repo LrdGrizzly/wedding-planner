@@ -1,3 +1,5 @@
+export const LOCALE = 'it-IT';
+
 const cache = new Map<string, Intl.NumberFormat>();
 
 function fmt(currency: string, digits: number) {
@@ -5,9 +7,11 @@ function fmt(currency: string, digits: number) {
   let f = cache.get(key);
   if (!f) {
     try {
-      f = new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: digits, minimumFractionDigits: 0 });
+      // useGrouping 'always': Italian CLDR skips the separator for 4-digit numbers
+      // ("3727 €" next to "11.603 €"), which reads inconsistently in a budget
+      f = new Intl.NumberFormat(LOCALE, { style: 'currency', currency, maximumFractionDigits: digits, minimumFractionDigits: 0, useGrouping: 'always' as unknown as boolean });
     } catch {
-      f = new Intl.NumberFormat(undefined, { maximumFractionDigits: digits });
+      f = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: digits, useGrouping: 'always' as unknown as boolean });
     }
     cache.set(key, f);
   }
@@ -28,7 +32,7 @@ export function price(n: number | null | undefined, currency: string) {
 export function currencySymbol(currency: string) {
   try {
     return (
-      new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
+      new Intl.NumberFormat(LOCALE, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
         .formatToParts(0)
         .find((p) => p.type === 'currency')?.value ?? currency
     );
@@ -41,14 +45,14 @@ export function shortDate(iso: string) {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export function tinyDate(iso: string) {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
 }
 
 /** Parse a typed amount: accepts "1.250,50", "1,250.50", "1250" or "". */
@@ -76,8 +80,13 @@ export function parseAmount(s: string): number | null {
 }
 
 export function relDays(n: number) {
-  if (n === 0) return 'today';
-  if (n === 1) return 'tomorrow';
-  if (n === -1) return 'yesterday';
-  return n > 0 ? `in ${n} days` : `${-n} days ago`;
+  if (n === 0) return 'oggi';
+  if (n === 1) return 'domani';
+  if (n === -1) return 'ieri';
+  return n > 0 ? `tra ${n} giorni` : `${-n} giorni fa`;
+}
+
+/** Italian singular/plural: plural(1, 'incluso', 'inclusi') → '1 incluso'. */
+export function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`;
 }

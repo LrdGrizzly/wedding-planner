@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, CalendarPlus, Trash2, Hourglass } from 'lucide-react';
 import { Button, Card, Empty, PageHeader, Segmented } from '@/components/ui';
-import { AVAIL_LABEL, daysUntil, getAvail, availId } from '@/lib/calc';
+import { AVAIL_LABEL, AVAIL_SHORT, daysUntil, getAvail, availId } from '@/lib/calc';
 import { relDays, shortDate } from '@/lib/format';
 import { live, patch, remove, upsert, useDoc } from '@/lib/store';
 import type { AvailStatus, Doc, WeddingDate } from '@/lib/types';
@@ -37,26 +37,26 @@ export function Dates({ onTab }: { onTab: (t: Tab) => void }) {
 
   return (
     <div>
-      <PageHeader title="Dates" subtitle="The dates you're considering, and which venues can do them." />
+      <PageHeader title="Date" subtitle="Le date che state valutando e quali location sono libere." />
 
       <Card className="mb-6 p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="flex-1">
-            <span className="mb-1.5 block text-[13px] font-medium text-ink-2">Date</span>
+            <span className="mb-1.5 block text-[13px] font-medium text-ink-2">Data</span>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 w-full rounded-xl border border-line bg-surface px-3 focus:border-accent focus:outline-none" />
           </label>
           <label className="flex-1">
-            <span className="mb-1.5 block text-[13px] font-medium text-ink-2">Label (optional)</span>
+            <span className="mb-1.5 block text-[13px] font-medium text-ink-2">Etichetta (facoltativa)</span>
             <input
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && add()}
-              placeholder="e.g. First choice"
+              placeholder="es. Prima scelta"
               className="h-10 w-full rounded-xl border border-line bg-surface px-3 focus:border-accent focus:outline-none"
             />
           </label>
           <Button variant="primary" onClick={add} disabled={!date}>
-            <CalendarPlus className="size-4" /> Add date
+            <CalendarPlus className="size-4" /> Aggiungi data
           </Button>
         </div>
       </Card>
@@ -64,7 +64,7 @@ export function Dates({ onTab }: { onTab: (t: Tab) => void }) {
       {holds.length > 0 && (
         <Card className="mb-6 border-held/30 bg-held-bg/40 p-4">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-held">
-            <Hourglass className="size-4" /> Holds to decide on
+            <Hourglass className="size-4" /> Opzioni da decidere
           </div>
           <ul className="space-y-1 text-sm">
             {holds.map(({ a, venue, date, days }) => (
@@ -73,7 +73,7 @@ export function Dates({ onTab }: { onTab: (t: Tab) => void }) {
                   {venueName(venue)} · {date.label || shortDate(date.date)}
                 </span>
                 <span className={cn('tabular-nums', days != null && days <= 7 ? 'font-medium text-na' : 'text-ink-2')}>
-                  {days == null ? 'no expiry entered' : days < 0 ? `lapsed ${relDays(days)}` : `ends ${relDays(days)}`}
+                  {days == null ? 'scadenza non inserita' : days < 0 ? `scaduta ${relDays(days)}` : `scade ${relDays(days)}`}
                 </span>
               </li>
             ))}
@@ -82,14 +82,14 @@ export function Dates({ onTab }: { onTab: (t: Tab) => void }) {
       )}
 
       {dates.length === 0 ? (
-        <Empty icon={<CalendarDays className="size-6" />} title="No dates yet" body="Add each date you'd consider, then mark which venues are available, holding it for you, or already taken." />
+        <Empty icon={<CalendarDays className="size-6" />} title="Ancora nessuna data" body="Aggiungi ogni data che prendereste in considerazione, poi segna quali location sono libere, ve la tengono in opzione o sono già occupate." />
       ) : venues.length === 0 ? (
         <Empty
           icon={<CalendarDays className="size-6" />}
-          title="Add venues to track availability"
+          title="Aggiungi le location per seguirne la disponibilità"
           action={
             <Button variant="primary" onClick={() => onTab('venues')}>
-              Go to venues
+              Vai alle location
             </Button>
           }
         />
@@ -116,21 +116,21 @@ function DateCard({ doc, date }: { doc: Doc; date: WeddingDate }) {
           <div className="mt-0.5 flex flex-col text-xs text-muted">
             <input
               defaultValue={date.label}
-              placeholder="Add label"
-              aria-label="Date label"
+              placeholder="Aggiungi etichetta"
+              aria-label="Etichetta della data"
               onBlur={(e) => e.target.value !== date.label && patch('dates', date.id, { label: e.target.value })}
               className="w-full bg-transparent text-ink-2 placeholder:text-muted/70 focus:text-ink focus:outline-none md:text-sm"
             />
             <span>
-              {days != null && days >= 0 ? `${days} days away · ` : ''}
-              {free} of {venues.length} venues possible
+              {days != null && days >= 0 ? `tra ${days} giorni · ` : ''}
+              {free === 1 ? `1 location possibile su ${venues.length}` : `${free} location possibili su ${venues.length}`}
             </span>
           </div>
         </div>
         <button
-          aria-label="Remove date"
-          title="Remove date"
-          onClick={() => window.confirm(`Remove ${shortDate(date.date)}?`) && remove('dates', date.id)}
+          aria-label="Rimuovi data"
+          title="Rimuovi data"
+          onClick={() => window.confirm(`Rimuovere ${shortDate(date.date)}?`) && remove('dates', date.id)}
           className="inline-flex size-9 items-center justify-center rounded-full text-muted transition hover:bg-na-bg hover:text-na"
         >
           <Trash2 className="size-4" />
@@ -155,7 +155,7 @@ function AvailRow({ doc, venueId, dateId, name }: { doc: Doc; venueId: string; d
     <div className="px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="truncate text-sm font-medium">{name}</span>
-        {status === 'held' && days != null && <span className={cn('shrink-0 text-xs', days <= 7 ? 'font-medium text-na' : 'text-held')}>{days < 0 ? `lapsed ${relDays(days)}` : `ends ${relDays(days)}`}</span>}
+        {status === 'held' && days != null && <span className={cn('shrink-0 text-xs', days <= 7 ? 'font-medium text-na' : 'text-held')}>{days < 0 ? `scaduta ${relDays(days)}` : `scade ${relDays(days)}`}</span>}
       </div>
       <Segmented
         size="sm"
@@ -164,14 +164,14 @@ function AvailRow({ doc, venueId, dateId, name }: { doc: Doc; venueId: string; d
         className="w-full"
         options={(['available', 'held', 'unavailable', 'booked', 'unknown'] as AvailStatus[]).map((s) => ({
           value: s,
-          label: s === 'unknown' ? '?' : s === 'unavailable' ? 'Taken' : AVAIL_LABEL[s],
+          label: AVAIL_SHORT[s],
           title: AVAIL_LABEL[s],
           activeClass: cn(AVAIL_STYLE[s].replace(/line-through|decoration-1/g, ''), 'shadow-none'),
         }))}
       />
       {status === 'held' && (
         <label className="mt-2 flex items-center justify-between gap-3 text-xs text-held">
-          Hold expires on
+          L'opzione scade il
           <input type="date" value={a?.holdUntil ?? ''} onChange={(e) => save({ holdUntil: e.target.value })} className="h-9 rounded-lg border border-line bg-surface px-2 text-ink focus:outline-none md:text-xs" />
         </label>
       )}

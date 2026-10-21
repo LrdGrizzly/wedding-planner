@@ -5,6 +5,9 @@ import App from './App';
 import { initDrive } from './lib/drive';
 import './index.css';
 
+// Dev-only: fake Google + Drive for testing sync (never part of the production build)
+if (import.meta.env.DEV && localStorage.getItem('wp_drive_mock')) await import('./dev/driveMock');
+
 initDrive();
 
 createRoot(document.getElementById('root')!).render(

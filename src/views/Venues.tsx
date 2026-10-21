@@ -3,9 +3,10 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Landmark, MapPin, Plus, Star, Users, ChevronRight, Trash2, StickyNote, ExternalLink, Phone, Mail } from 'lucide-react';
 import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
 import { AmountInput, Button, Card, Empty, Field, PageHeader, Segmented, Select, Sheet, StatusPicker, Stars, TextInput } from '@/components/ui';
-import { AVAIL_LABEL, UNIT_LABEL, availId, daysUntil, getAvail, getOffer, lineCost, unitMultiplier, venueSummary } from '@/lib/calc';
+import { AVAIL_LABEL, AVAIL_SHORT, UNIT_LABEL, availId, daysUntil, getAvail, getOffer, lineCost, unitMultiplier, venueSummary } from '@/lib/calc';
 import { GROUPS } from '@/lib/defaults';
 import { money, price, relDays, shortDate, tinyDate } from '@/lib/format';
+import { syncAtBoundary } from '@/lib/drive';
 import { getDoc, live, patch, removeVenue, setSettings, upsert, useDoc } from '@/lib/store';
 import type { AvailStatus, Doc, GroupId, Item, Offer, TaxMode, Unit, Venue } from '@/lib/types';
 import { cn, uid } from '@/lib/utils';
@@ -33,7 +34,7 @@ export function newVenue(order: number): Venue {
   };
 }
 
-export const venueName = (v: Venue) => v.name.trim() || 'Untitled venue';
+export const venueName = (v: Venue) => v.name.trim() || 'Location senza nome';
 
 export function Venues({ openId, setOpenId }: { openId: string | null; setOpenId: (id: string | null) => void }) {
   const doc = useDoc();
@@ -49,12 +50,12 @@ export function Venues({ openId, setOpenId }: { openId: string | null; setOpenId
   return (
     <div>
       <PageHeader
-        title="Venues"
-        subtitle={venues.length ? `${venues.length} venue${venues.length === 1 ? '' : 's'} · costs worked out for ${doc.settings.guests} guests` : undefined}
+        title="Location"
+        subtitle={venues.length ? `${venues.length} location · costi calcolati per ${doc.settings.guests} invitati` : undefined}
         action={
           venues.length > 0 && (
             <Button variant="primary" onClick={add}>
-              <Plus className="size-4" /> Add venue
+              <Plus className="size-4" /> Aggiungi location
             </Button>
           )
         }
@@ -63,11 +64,11 @@ export function Venues({ openId, setOpenId }: { openId: string | null; setOpenId
       {venues.length === 0 ? (
         <Empty
           icon={<Landmark className="size-6" />}
-          title="Add the venues you've seen"
-          body="For each one, go through the checklist: what's included, what costs extra (and whether service tax applies), and what they don't offer at all."
+          title="Aggiungi le location che avete visto"
+          body="Per ognuna, passa in rassegna la lista: cosa è incluso, cosa si paga a parte (e se c'è IVA o servizio) e cosa non offrono proprio."
           action={
             <Button variant="primary" onClick={add}>
-              <Plus className="size-4" /> Add your first venue
+              <Plus className="size-4" /> Aggiungi la prima location
             </Button>
           }
         />
@@ -75,7 +76,10 @@ export function Venues({ openId, setOpenId }: { openId: string | null; setOpenId
         <div className="grid gap-3 md:grid-cols-2 md:gap-4">
           {venues.map((v, i) => (
             <motion.div key={v.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.04, 0.3) }}>
-              <VenueCard doc={doc} venue={v} currency={cur} onOpen={() => setOpenId(v.id)} />
+              <VenueCard doc={doc} venue={v} currency={cur} onOpen={() => {
+                  syncAtBoundary();
+                  setOpenId(v.id);
+                }} />
             </motion.div>
           ))}
         </div>
@@ -97,7 +101,7 @@ function VenueCard({ doc, venue, currency, onOpen }: { doc: Doc; venue: Venue; c
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className={cn('truncate font-display text-lg font-medium', !venue.name.trim() && 'text-muted italic')}>{venueName(venue)}</h3>
-            {chosen && <span className="shrink-0 rounded-full bg-gold-soft px-2 py-0.5 text-[11px] font-semibold text-gold">Our pick</span>}
+            {chosen && <span className="shrink-0 rounded-full bg-gold-soft px-2 py-0.5 text-[11px] font-semibold text-gold">La nostra scelta</span>}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-muted">
             {venue.location && (
@@ -109,7 +113,7 @@ function VenueCard({ doc, venue, currency, onOpen }: { doc: Doc; venue: Venue; c
             {venue.capacity != null && (
               <span className={cn('inline-flex items-center gap-1', venue.capacity < doc.settings.guests && 'text-na')}>
                 <Users className="size-3.5" />
-                up to {venue.capacity}
+                fino a {venue.capacity}
               </span>
             )}
             {venue.rating != null && (
@@ -125,17 +129,17 @@ function VenueCard({ doc, venue, currency, onOpen }: { doc: Doc; venue: Venue; c
 
       <div className="mt-4 flex items-end justify-between gap-3">
         <div>
-          <div className="text-xs text-muted">Known cost</div>
+          <div className="text-xs text-muted">Costo noto</div>
           <AnimatedNumber value={s.known} format={(n) => money(n, currency)} className="font-display text-[26px] leading-none font-medium tracking-tight" />
         </div>
         {s.missing > 0 ? (
           <span className="rounded-full bg-ext-bg px-2.5 py-1 text-xs font-medium text-ext">
-            {s.missing} price{s.missing === 1 ? '' : 's'} missing
+            {s.missing === 1 ? '1 prezzo mancante' : `${s.missing} prezzi mancanti`}
           </span>
         ) : s.counts.unknown > 0 ? (
-          <span className="rounded-full bg-unk-bg px-2.5 py-1 text-xs font-medium text-unk">{s.counts.unknown} still to ask</span>
+          <span className="rounded-full bg-unk-bg px-2.5 py-1 text-xs font-medium text-unk">{s.counts.unknown} da chiedere</span>
         ) : (
-          <span className="rounded-full bg-inc-bg px-2.5 py-1 text-xs font-medium text-inc">Complete</span>
+          <span className="rounded-full bg-inc-bg px-2.5 py-1 text-xs font-medium text-inc">Completa</span>
         )}
       </div>
 
@@ -146,10 +150,10 @@ function VenueCard({ doc, venue, currency, onOpen }: { doc: Doc; venue: Venue; c
         ))}
       </div>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-2">
-        <Legend dot="bg-inc" n={s.counts.included} label="included" />
-        <Legend dot="bg-ext" n={s.counts.extra} label="extra" />
-        <Legend dot="bg-na" n={s.counts.unavailable} label="not offered" />
-        <Legend dot="bg-unk" n={s.counts.unknown} label="not asked" />
+        <Legend dot="bg-inc" n={s.counts.included} label={['incluso', 'inclusi']} />
+        <Legend dot="bg-ext" n={s.counts.extra} label={['a pagamento', 'a pagamento']} />
+        <Legend dot="bg-na" n={s.counts.unavailable} label={['non previsto', 'non previsti']} />
+        <Legend dot="bg-unk" n={s.counts.unknown} label={['da chiedere', 'da chiedere']} />
       </div>
 
       {dates.length > 0 && (
@@ -164,12 +168,12 @@ function VenueCard({ doc, venue, currency, onOpen }: { doc: Doc; venue: Venue; c
   );
 }
 
-function Legend({ dot, n, label }: { dot: string; n: number; label: string }) {
+function Legend({ dot, n, label }: { dot: string; n: number; label: [string, string] }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={cn('size-2 rounded-full', dot)} />
       <span className="font-medium tabular-nums">{n}</span>
-      <span className="text-muted">{label}</span>
+      <span className="text-muted">{n === 1 ? label[0] : label[1]}</span>
     </span>
   );
 }
@@ -211,8 +215,8 @@ function VenueSheet({ venueId, onClose }: { venueId: string | null; onClose: () 
             key={venue.id}
             defaultValue={venue.name}
             autoFocus={!venue.name}
-            placeholder="Venue name"
-            aria-label="Venue name"
+            placeholder="Nome della location"
+            aria-label="Nome della location"
             onBlur={(e) => e.target.value !== venue.name && patch('venues', venue.id, { name: e.target.value })}
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
             className="w-full bg-transparent font-display text-2xl font-medium tracking-tight placeholder:text-muted/60 focus:outline-none md:text-2xl"
@@ -228,9 +232,9 @@ function VenueSheet({ venueId, onClose }: { venueId: string | null; onClose: () 
             onChange={setPane}
             className="mb-5 w-full"
             options={[
-              { value: 'offer', label: 'What they offer' },
-              { value: 'dates', label: 'Dates' },
-              { value: 'details', label: 'Details' },
+              { value: 'offer', label: 'Cosa offrono' },
+              { value: 'dates', label: 'Date' },
+              { value: 'details', label: 'Dettagli' },
             ]}
           />
           {pane === 'offer' && <OfferList doc={doc} venue={venue} />}
@@ -248,9 +252,9 @@ function VenueTotals({ doc, venue }: { doc: Doc; venue: Venue }) {
   return (
     <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span className="font-medium text-ink tabular-nums">{money(s.known, cur)}</span>
-      <span>known for {doc.settings.guests} guests</span>
-      {s.tax > 0 && <span>· incl. {money(s.tax, cur)} tax</span>}
-      {s.missing > 0 && <span className="text-ext">· {s.missing} missing</span>}
+      <span>noti per {doc.settings.guests} invitati</span>
+      {s.tax > 0 && <span>· di cui {money(s.tax, cur)} di IVA/servizio</span>}
+      {s.missing > 0 && <span className="text-ext">· {s.missing === 1 ? '1 mancante' : `${s.missing} mancanti`}</span>}
     </span>
   );
 }
@@ -277,14 +281,14 @@ function OfferList({ doc, venue }: { doc: Doc; venue: Venue }) {
                 />
               ) : (
                 <button onClick={() => setAdding(g.id)} className="flex w-full items-center gap-2 px-4 py-3 text-sm text-muted transition hover:bg-surface-2 hover:text-ink">
-                  <Plus className="size-4" /> Add item to the checklist
+                  <Plus className="size-4" /> Aggiungi una voce alla lista
                 </button>
               )}
             </div>
           </section>
         );
       })}
-      <p className="text-xs text-muted">Items you add appear for every venue, so they stay comparable.</p>
+      <p className="text-xs text-muted">Le voci che aggiungi compaiono per tutte le location, così restano confrontabili.</p>
     </div>
   );
 }
@@ -306,13 +310,13 @@ function NewItemRow({ group, order, onDone }: { group: GroupId; order: number; o
           if (e.key === 'Enter') save();
           if (e.key === 'Escape') onDone();
         }}
-        placeholder="e.g. Photo booth"
+        placeholder="es. Photo booth"
         className="h-10 flex-1 rounded-xl border border-line bg-surface px-3 focus:border-accent focus:outline-none"
       />
       <div className="flex gap-2">
-        <Select value={unit} onChange={setUnit} ariaLabel="Priced" className="w-36" options={(Object.keys(UNIT_LABEL) as Unit[]).map((u) => ({ value: u, label: UNIT_LABEL[u] }))} />
+        <Select value={unit} onChange={setUnit} ariaLabel="Come si paga" className="w-36" options={(Object.keys(UNIT_LABEL) as Unit[]).map((u) => ({ value: u, label: UNIT_LABEL[u] }))} />
         <Button variant="primary" onClick={save}>
-          Add
+          Aggiungi
         </Button>
       </div>
     </div>
@@ -337,8 +341,8 @@ function OfferRow({ doc, venue, item }: { doc: Doc; venue: Venue; item: Item }) 
           <div className={cn('text-[15px] font-medium', offer.status === 'unavailable' && 'text-ink-2 line-through decoration-na/50')}>{item.name}</div>
           {offer.status === 'extra' && line.total != null && (
             <div className="mt-0.5 text-xs text-muted tabular-nums">
-              {price(offer.price, cur)} {offer.unit !== 'flat' && `× ${mult} ${offer.unit === 'perGuest' ? 'guests' : offer.unit === 'perHour' ? 'h' : ''}`}
-              {line.tax ? ` + ${money(line.tax, cur, 2)} tax` : ''}
+              {price(offer.price, cur)} {offer.unit !== 'flat' && `× ${mult} ${offer.unit === 'perGuest' ? 'invitati' : offer.unit === 'perHour' ? 'ore' : ''}`}
+              {line.tax ? ` + ${money(line.tax, cur, 2)} IVA/servizio` : ''}
             </div>
           )}
         </div>
@@ -347,12 +351,12 @@ function OfferRow({ doc, venue, item }: { doc: Doc; venue: Venue; item: Item }) 
             line.total != null ? (
               <span className="font-medium tabular-nums">{money(line.total, cur)}</span>
             ) : (
-              <span className="text-xs font-medium text-ext">{line.missing === 'price' ? 'Price?' : line.missing === 'qty' ? (offer.unit === 'perHour' ? 'Hours?' : 'How many?') : 'Tax rate?'}</span>
+              <span className="text-xs font-medium text-ext">{line.missing === 'price' ? 'Prezzo?' : line.missing === 'qty' ? (offer.unit === 'perHour' ? 'Quante ore?' : 'Quanti?') : 'Aliquota?'}</span>
             )
           ) : offer.status === 'included' ? (
-            <span className="text-xs font-medium text-inc">Included</span>
+            <span className="text-xs font-medium text-inc">Incluso</span>
           ) : offer.status === 'unavailable' ? (
-            <span className="text-xs font-medium text-na">Not offered</span>
+            <span className="text-xs font-medium text-na">Non previsto</span>
           ) : null}
         </div>
       </div>
@@ -363,9 +367,9 @@ function OfferRow({ doc, venue, item }: { doc: Doc; venue: Venue; item: Item }) 
           onClick={() => setNoteOpen((o) => !o)}
           className={cn('inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2 text-xs transition hover:bg-surface-2', offer.note ? 'text-ink-2' : 'text-muted')}
           aria-expanded={noteOpen}
-          aria-label="Note"
+          aria-label="Nota"
         >
-          <StickyNote className={cn('size-4', offer.note && 'fill-gold-soft')} /> <span className="hidden sm:inline">Note</span>
+          <StickyNote className={cn('size-4', offer.note && 'fill-gold-soft')} /> <span className="hidden sm:inline">Nota</span>
         </button>
       </div>
 
@@ -373,18 +377,18 @@ function OfferRow({ doc, venue, item }: { doc: Doc; venue: Venue; item: Item }) 
         {offer.status === 'extra' && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
             <div className="grid grid-cols-2 gap-2 pt-3 sm:grid-cols-4">
-              <Field label="Price" className="col-span-1">
-                <AmountInput value={offer.price} currency={cur} onCommit={(price) => save({ price })} ariaLabel={`${item.name} price`} />
+              <Field label="Prezzo" className="col-span-1">
+                <AmountInput value={offer.price} currency={cur} onCommit={(price) => save({ price })} ariaLabel={`Prezzo ${item.name}`} />
               </Field>
-              <Field label="Charged" className="col-span-1">
+              <Field label="Si paga" className="col-span-1">
                 <Select value={offer.unit} onChange={(unit) => save({ unit })} options={(Object.keys(UNIT_LABEL) as Unit[]).map((u) => ({ value: u, label: UNIT_LABEL[u] }))} />
               </Field>
               {needsQty && (
-                <Field label={offer.unit === 'perHour' ? 'Hours' : 'How many'} className="col-span-1">
+                <Field label={offer.unit === 'perHour' ? 'Ore' : 'Quantità'} className="col-span-1">
                   <AmountInput value={offer.qty} onCommit={(qty) => save({ qty })} />
                 </Field>
               )}
-              <Field label="Service tax" className={cn(needsQty ? 'col-span-1' : 'col-span-2')}>
+              <Field label="IVA / servizio" className={cn(needsQty ? 'col-span-1' : 'col-span-2')}>
                 <TaxInput mode={offer.taxMode} value={offer.taxValue} currency={cur} onChange={(taxMode, taxValue) => save({ taxMode, taxValue })} />
               </Field>
             </div>
@@ -393,7 +397,7 @@ function OfferRow({ doc, venue, item }: { doc: Doc; venue: Venue; item: Item }) 
         {noteOpen && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
             <div className="pt-3">
-              <TextInput value={offer.note} onCommit={(note) => save({ note })} placeholder="e.g. only white linens, min. 4 hours" />
+              <TextInput value={offer.note} onCommit={(note) => save({ note })} placeholder="es. solo tovagliato bianco, minimo 4 ore" />
             </div>
           </motion.div>
         )}
@@ -408,12 +412,12 @@ export function TaxInput({ mode, value, currency, onChange }: { mode: TaxMode; v
       <Select
         value={mode}
         onChange={(m) => onChange(m, m === mode ? value : null)}
-        ariaLabel="Service tax"
+        ariaLabel="IVA / servizio"
         className={cn(mode === 'none' ? 'w-full' : 'w-[5.5rem] shrink-0 px-2.5')}
         options={[
-          { value: 'none', label: mode === 'none' ? 'No tax' : 'None' },
+          { value: 'none', label: mode === 'none' ? 'Nessuna' : 'No' },
           { value: 'percent', label: '%' },
-          { value: 'amount', label: 'Fixed' },
+          { value: 'amount', label: 'Fissa' },
         ]}
       />
       {mode !== 'none' && (
@@ -423,8 +427,8 @@ export function TaxInput({ mode, value, currency, onChange }: { mode: TaxMode; v
           onCommit={(v) => onChange(mode, v)}
           suffix={mode === 'percent' ? '%' : undefined}
           currency={mode === 'amount' ? currency : undefined}
-          placeholder={mode === 'percent' ? 'rate' : 'amount'}
-          ariaLabel={mode === 'percent' ? 'Tax rate' : 'Tax amount'}
+          placeholder={mode === 'percent' ? 'aliquota' : 'importo'}
+          ariaLabel={mode === 'percent' ? 'Aliquota' : 'Importo IVA/servizio'}
         />
       )}
     </div>
@@ -434,7 +438,7 @@ export function TaxInput({ mode, value, currency, onChange }: { mode: TaxMode; v
 function VenueDates({ doc, venue }: { doc: Doc; venue: Venue }) {
   const dates = useMemo(() => live(doc.dates).sort((a, b) => a.date.localeCompare(b.date)), [doc.dates]);
   if (!dates.length) {
-    return <p className="rounded-2xl border border-dashed border-line-strong p-6 text-center text-sm text-muted">Add the dates you're considering in the Dates tab, then mark each venue's availability here.</p>;
+    return <p className="rounded-2xl border border-dashed border-line-strong p-6 text-center text-sm text-muted">Aggiungi le date che state valutando nella sezione Date, poi segna qui la disponibilità di questa location.</p>;
   }
   return (
     <div className="space-y-3">
@@ -464,7 +468,7 @@ export function AvailEditor({ doc, venueId, dateId, title }: { doc: Doc; venueId
     <div className="rounded-2xl border border-line bg-surface p-3.5">
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <span className="text-sm font-medium">{title}</span>
-        {days != null && <span className={cn('text-xs font-medium', days <= 7 ? 'text-na' : 'text-held')}>Hold ends {relDays(days)}</span>}
+        {days != null && <span className={cn('text-xs font-medium', days <= 7 ? 'text-na' : 'text-held')}>Opzione scade {relDays(days)}</span>}
       </div>
       <Segmented
         size="sm"
@@ -473,14 +477,14 @@ export function AvailEditor({ doc, venueId, dateId, title }: { doc: Doc; venueId
         className="w-full"
         options={(['available', 'held', 'unavailable', 'booked', 'unknown'] as AvailStatus[]).map((s) => ({
           value: s,
-          label: s === 'unknown' ? '?' : AVAIL_LABEL[s],
+          label: AVAIL_SHORT[s],
           title: AVAIL_LABEL[s],
           activeClass: cn(AVAIL_STYLE[s].replace(/line-through|decoration-1/g, ''), 'shadow-none'),
         }))}
       />
       {status === 'held' && (
         <div className="mt-3">
-          <Field label="Hold expires on">
+          <Field label="L'opzione scade il">
             <input type="date" value={a?.holdUntil ?? ''} onChange={(e) => save({ holdUntil: e.target.value })} className="h-10 w-full rounded-xl border border-line bg-surface px-3 focus:border-accent focus:outline-none" />
           </Field>
         </div>
@@ -497,34 +501,34 @@ function VenueDetails({ doc, venue, onDeleted }: { doc: Doc; venue: Venue; onDel
     <div className="space-y-6">
       <Card className="flex items-center justify-between gap-3 p-4">
         <div>
-          <div className="text-sm font-medium">Our pick</div>
-          <div className="text-xs text-muted">Used for the budget on the Overview and Budget tabs.</div>
+          <div className="text-sm font-medium">La nostra scelta</div>
+          <div className="text-xs text-muted">Usata per il budget nel Riepilogo e nella sezione Budget.</div>
         </div>
         <Button variant={chosen ? 'primary' : 'secondary'} size="sm" onClick={() => setSettings({ chosenVenueId: chosen ? null : venue.id })}>
-          {chosen ? 'Chosen ✓' : 'Choose'}
+          {chosen ? 'Scelta ✓' : 'Scegli'}
         </Button>
       </Card>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-[13px] font-medium text-ink-2">Our rating</span>
+          <span className="text-[13px] font-medium text-ink-2">Il nostro voto</span>
           <Stars value={venue.rating} onChange={(rating) => p({ rating })} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Location">
-            <TextInput value={venue.location} onCommit={(location) => p({ location })} placeholder="Town or address" />
+          <Field label="Dove">
+            <TextInput value={venue.location} onCommit={(location) => p({ location })} placeholder="Comune o indirizzo" />
           </Field>
-          <Field label="Max guests" hint={venue.capacity != null && venue.capacity < doc.settings.guests ? `Below your ${doc.settings.guests} guests` : undefined}>
+          <Field label="Capienza massima" hint={venue.capacity != null && venue.capacity < doc.settings.guests ? `Meno dei vostri ${doc.settings.guests} invitati` : undefined}>
             <AmountInput value={venue.capacity} onCommit={(capacity) => p({ capacity })} />
           </Field>
-          <Field label="Visited on">
+          <Field label="Visitata il">
             <input type="date" value={venue.visitDate} onChange={(e) => p({ visitDate: e.target.value })} className="h-10 w-full rounded-xl border border-line bg-surface px-3 focus:border-accent focus:outline-none" />
           </Field>
-          <Field label="Website">
+          <Field label="Sito web">
             <div className="flex gap-1.5">
-              <TextInput value={venue.website} onCommit={(website) => p({ website })} placeholder="venue.com" />
+              <TextInput value={venue.website} onCommit={(website) => p({ website })} placeholder="location.it" />
               {link && (
-                <a href={link} target="_blank" rel="noreferrer" className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2 hover:text-ink" aria-label="Open website">
+                <a href={link} target="_blank" rel="noreferrer" className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2 hover:text-ink" aria-label="Apri il sito">
                   <ExternalLink className="size-4" />
                 </a>
               )}
@@ -534,16 +538,16 @@ function VenueDetails({ doc, venue, onDeleted }: { doc: Doc; venue: Venue; onDel
       </section>
 
       <section>
-        <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Contact</h3>
+        <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Contatto</h3>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Name">
+          <Field label="Nome">
             <TextInput value={venue.contactName} onCommit={(contactName) => p({ contactName })} />
           </Field>
-          <Field label="Phone">
+          <Field label="Telefono">
             <div className="flex gap-1.5">
               <TextInput value={venue.phone} onCommit={(phone) => p({ phone })} inputMode="tel" />
               {venue.phone && (
-                <a href={`tel:${venue.phone.replace(/\s/g, '')}`} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2" aria-label="Call">
+                <a href={`tel:${venue.phone.replace(/\s/g, '')}`} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2" aria-label="Chiama">
                   <Phone className="size-4" />
                 </a>
               )}
@@ -553,7 +557,7 @@ function VenueDetails({ doc, venue, onDeleted }: { doc: Doc; venue: Venue; onDel
             <div className="flex gap-1.5">
               <TextInput value={venue.email} onCommit={(email) => p({ email })} inputMode="email" />
               {venue.email && (
-                <a href={`mailto:${venue.email}`} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2" aria-label="Email">
+                <a href={`mailto:${venue.email}`} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2" aria-label="Scrivi un'email">
                   <Mail className="size-4" />
                 </a>
               )}
@@ -563,30 +567,30 @@ function VenueDetails({ doc, venue, onDeleted }: { doc: Doc; venue: Venue; onDel
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2">
-        <Field label="What we loved">
-          <TextInput multiline value={venue.pros} onCommit={(pros) => p({ pros })} placeholder="The terrace at sunset…" />
+        <Field label="Cosa ci è piaciuto">
+          <TextInput multiline value={venue.pros} onCommit={(pros) => p({ pros })} placeholder="La terrazza al tramonto…" />
         </Field>
-        <Field label="Concerns">
-          <TextInput multiline value={venue.cons} onCommit={(cons) => p({ cons })} placeholder="Music must stop at 23:00…" />
+        <Field label="Dubbi">
+          <TextInput multiline value={venue.cons} onCommit={(cons) => p({ cons })} placeholder="La musica deve finire alle 23:00…" />
         </Field>
       </section>
 
       <section>
-        <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Contract terms</h3>
+        <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Condizioni del contratto</h3>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Deposit">
-            <TextInput value={venue.deposit} onCommit={(deposit) => p({ deposit })} placeholder="e.g. 30% on booking" />
+          <Field label="Caparra">
+            <TextInput value={venue.deposit} onCommit={(deposit) => p({ deposit })} placeholder="es. 30% alla prenotazione" />
           </Field>
-          <Field label="Payment schedule">
+          <Field label="Pagamenti">
             <TextInput value={venue.paymentTerms} onCommit={(paymentTerms) => p({ paymentTerms })} />
           </Field>
-          <Field label="Cancellation">
+          <Field label="Disdetta">
             <TextInput value={venue.cancellation} onCommit={(cancellation) => p({ cancellation })} />
           </Field>
         </div>
       </section>
 
-      <Field label="Other notes">
+      <Field label="Altre note">
         <TextInput multiline value={venue.notes} onCommit={(notes) => p({ notes })} />
       </Field>
 
@@ -594,13 +598,13 @@ function VenueDetails({ doc, venue, onDeleted }: { doc: Doc; venue: Venue; onDel
         <Button
           variant="danger"
           onClick={() => {
-            if (window.confirm(`Delete ${venueName(venue)} and everything entered for it?`)) {
+            if (window.confirm(`Eliminare ${venueName(venue)} e tutto ciò che hai inserito?`)) {
               removeVenue(venue.id);
               onDeleted();
             }
           }}
         >
-          <Trash2 className="size-4" /> Delete venue
+          <Trash2 className="size-4" /> Elimina location
         </Button>
       </div>
     </div>
