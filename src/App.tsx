@@ -10,6 +10,8 @@ import { Compare } from '@/views/Compare';
 import { Dates } from '@/views/Dates';
 import { Budget } from '@/views/Budget';
 import { SettingsSheet } from '@/views/Settings';
+import { ConfirmHost } from '@/components/ui';
+import { SYNC_ENABLED } from '@/lib/flags';
 
 export type Tab = 'overview' | 'venues' | 'compare' | 'dates' | 'budget';
 
@@ -57,7 +59,7 @@ export default function App() {
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-30 border-b border-line/70 bg-bg/85 backdrop-blur-md">
+      <header className="sticky top-[env(safe-area-inset-top,0px)] z-30 border-b border-line/70 bg-bg/85 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 md:h-16 md:px-6">
           <div className="flex items-center gap-2.5">
             <img src="./icon.svg" alt="" className="size-7 md:size-8" />
@@ -79,7 +81,7 @@ export default function App() {
             </div>
           </nav>
           <div className="ml-auto flex items-center gap-1 md:ml-0">
-            <SyncChip onSetup={() => setSettingsOpen(true)} />
+            {SYNC_ENABLED && <SyncChip onSetup={() => setSettingsOpen(true)} />}
             <button
               aria-label="Impostazioni"
               title="Impostazioni"
@@ -138,6 +140,7 @@ export default function App() {
       </nav>
 
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ConfirmHost />
     </div>
   );
 }

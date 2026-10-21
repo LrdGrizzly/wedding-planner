@@ -34,8 +34,10 @@
   color-scheme: light;
 }
 
+/* Dark palette: follows the system setting unless the host forces light,
+   and applies whenever the host forces dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #14120f;
     --surface: #1d1a16;
     --surface-2: #26221d;
@@ -65,6 +67,37 @@
     --shadow-lg: 0 10px 40px -10px rgb(0 0 0 / 0.7);
     color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+    --bg: #14120f;
+    --surface: #1d1a16;
+    --surface-2: #26221d;
+    --border: #2f2a23;
+    --border-strong: #423b31;
+    --ink: #f1ebe2;
+    --ink-2: #c4bbad;
+    --muted: #8f8677;
+    --accent: #9bbd99;
+    --accent-ink: #14120f;
+    --accent-soft: #263325;
+    --gold: #d6b56f;
+    --gold-soft: #3a311f;
+
+    --inc: #9fd0a2;
+    --inc-bg: #1f3321;
+    --ext: #e8bf73;
+    --ext-bg: #3a2d14;
+    --na: #ee9a92;
+    --na-bg: #3d1f1c;
+    --unk: #9a9184;
+    --unk-bg: #2a2621;
+    --held: #b7a9ec;
+    --held-bg: #2b2640;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px -4px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 40px -10px rgb(0 0 0 / 0.7);
+    color-scheme: dark;
 }
 
 @theme inline {
@@ -131,9 +164,12 @@ input[type='date']::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 @media (prefers-color-scheme: dark) {
-  input[type='date']::-webkit-calendar-picker-indicator {
+  :root:not([data-theme='light']) input[type='date']::-webkit-calendar-picker-indicator {
     filter: invert(1);
   }
+}
+:root[data-theme='dark'] input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 }
 
@@ -164,4 +200,15 @@ input[type='date']::-webkit-calendar-picker-indicator {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* On phones the page runs under the status bar: paint that band so content
+   scrolling up behind the sticky header never shows through. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 40;
+  background: var(--bg);
 }

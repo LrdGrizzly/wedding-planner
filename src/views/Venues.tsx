@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Landmark, MapPin, Plus, Star, Users, ChevronRight, Trash2, StickyNote, ExternalLink, Phone, Mail } from 'lucide-react';
 import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
-import { AmountInput, Button, Card, Empty, Field, PageHeader, Segmented, Select, Sheet, StatusPicker, Stars, TextInput } from '@/components/ui';
+import { AmountInput, Button, Card, Empty, Field, PageHeader, Segmented, Select, Sheet, StatusPicker, Stars, TextInput, confirmAction } from '@/components/ui';
 import { AVAIL_LABEL, AVAIL_SHORT, UNIT_LABEL, availId, daysUntil, getAvail, getOffer, lineCost, unitMultiplier, venueSummary } from '@/lib/calc';
 import { GROUPS } from '@/lib/defaults';
 import { money, price, relDays, shortDate, tinyDate } from '@/lib/format';
@@ -598,10 +598,11 @@ function VenueDetails({ doc, venue, onDeleted }: { doc: Doc; venue: Venue; onDel
         <Button
           variant="danger"
           onClick={() => {
-            if (window.confirm(`Eliminare ${venueName(venue)} e tutto ciò che hai inserito?`)) {
+            confirmAction(`Eliminare ${venueName(venue)} e tutto ciò che hai inserito?`).then((ok) => {
+              if (!ok) return;
               removeVenue(venue.id);
               onDeleted();
-            }
+            });
           }}
         >
           <Trash2 className="size-4" /> Elimina location

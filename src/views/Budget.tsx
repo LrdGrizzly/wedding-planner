@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
-import { AmountInput, Button, Card, Field, PageHeader, Select, TextInput } from '@/components/ui';
+import { AmountInput, Button, Card, Field, PageHeader, Select, TextInput, confirmAction } from '@/components/ui';
 import { costTotal, costsSummary, venueSummary } from '@/lib/calc';
 import { COST_CATEGORIES, makeCost } from '@/lib/defaults';
 import { money } from '@/lib/format';
@@ -199,7 +199,8 @@ function CostRow({ cost, currency }: { cost: Cost; currency: string }) {
                   aria-label="Elimina voce"
                   onClick={() => {
                     const name = getDoc().costs.find((c) => c.id === cost.id)?.name;
-                    if (!name || window.confirm(`Eliminare ${name}?`)) remove('costs', cost.id);
+                    if (!name) remove('costs', cost.id);
+                    else confirmAction(`Eliminare ${name}?`).then((ok) => ok && remove('costs', cost.id));
                   }}
                 >
                   <Trash2 className="size-4" />

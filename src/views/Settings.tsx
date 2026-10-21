@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Cloud, Download, FileJson, Plus, RefreshCw, Share2, Trash2, Upload, UserRound } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { AmountInput, Button, Field, Select, Sheet, TextInput } from '@/components/ui';
+import { AmountInput, Button, Field, Select, Sheet, TextInput, confirmAction } from '@/components/ui';
 import { UNIT_LABEL } from '@/lib/calc';
 import { GROUPS } from '@/lib/defaults';
 import { LOCALE } from '@/lib/format';
@@ -10,6 +10,7 @@ import { getDoc, live, mergeDocs, normalize, patch, remove, replaceDoc, setSetti
 import type { GroupId, Unit } from '@/lib/types';
 import { cn, uid } from '@/lib/utils';
 import { useDrive } from '@/App';
+import { SYNC_ENABLED } from '@/lib/flags';
 
 const CURRENCIES = ['EUR', 'GBP', 'USD', 'CHF', 'AUD', 'CAD', 'SEK', 'DKK', 'NOK', 'PLN'];
 
@@ -45,13 +46,16 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           </Field>
         </section>
 
-        <DriveSection />
+        {SYNC_ENABLED && <DriveSection />}
 
         <ChecklistEditor />
 
         <BackupSection />
 
-        <p className="text-center text-xs text-muted">Salvato su questo dispositivo{getConfig().clientId ? ' e su Google Drive' : ''}</p>
+        <p className="text-center text-xs text-muted">
+          Salvato su questo dispositivo{SYNC_ENABLED && getConfig().clientId ? ' e su Google Drive' : ''}
+          {!SYNC_ENABLED && ' · versione di prova senza sincronizzazione'}
+        </p>
       </div>
     </Sheet>
   );
@@ -154,7 +158,7 @@ function DriveSection() {
                 <Button size="sm" onClick={() => pickSharedFile()}>
                   Cambia file
                 </Button>
-                <Button size="sm" variant="danger" onClick={() => window.confirm('Scollegare Google Drive su questo dispositivo? I dati restano qui e su Drive.') && disconnect()}>
+                <Button size="sm" variant="danger" onClick={() => confirmAction('Scollegare Google Drive su questo dispositivo? I dati restano qui e su Drive.', 'Scollega').then((ok) => ok && disconnect())}>
                   Scollega
                 </Button>
               </div>
@@ -340,7 +344,7 @@ function ChecklistEditor() {
                           />
                           <button
                             aria-label={`Elimina ${i.name}`}
-                            onClick={() => window.confirm(`Eliminare "${i.name}" dalla lista? Anche quanto inserito per ogni location verrà nascosto.`) && remove('items', i.id)}
+                            onClick={() => confirmAction(`Eliminare "${i.name}" dalla lista? Anche quanto inserito per ogni location verrà nascosto.`).then((ok) => ok && remove('items', i.id))}
                             className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted hover:bg-na-bg hover:text-na"
                           >
                             <Trash2 className="size-4" />
@@ -369,6 +373,15 @@ function BackupSection() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState('');
   const exportJson = () => {
+    if (!SYNC_ENABLED) {
+      // The test build runs where downloads are blocked: copy instead
+      const text = JSON.stringify(getDoc(), null, 2);
+      navigator.clipboard
+        .writeText(text)
+        .then(() => setMsg('Backup copiato negli appunti. Incollalo in un file di testo per conservarlo.'))
+        .catch(() => setMsg('Impossibile copiare negli appunti su questo dispositivo.'));
+      return;
+    }
     const blob = new Blob([JSON.stringify(getDoc(), null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -392,7 +405,7 @@ function BackupSection() {
       <p className="text-sm text-ink-2">Scarica una copia di tutto o ripristinane una. L'importazione si unisce a ciò che c'è già.</p>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={exportJson}>
-          <Download className="size-3.5" /> Scarica backup
+          <Download className="size-3.5" /> {SYNC_ENABLED ? 'Scarica backup' : 'Copia backup'}
         </Button>
         <Button size="sm" onClick={() => fileRef.current?.click()}>
           <Upload className="size-3.5" /> Importa backup

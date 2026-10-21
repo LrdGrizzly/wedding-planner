@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, CalendarPlus, Trash2, Hourglass } from 'lucide-react';
-import { Button, Card, Empty, PageHeader, Segmented } from '@/components/ui';
+import { Button, Card, Empty, PageHeader, Segmented, confirmAction } from '@/components/ui';
 import { AVAIL_LABEL, AVAIL_SHORT, daysUntil, getAvail, availId } from '@/lib/calc';
 import { relDays, shortDate } from '@/lib/format';
 import { live, patch, remove, upsert, useDoc } from '@/lib/store';
@@ -22,7 +22,6 @@ export function upcomingHolds(doc: Doc, withinDays = 21) {
 export function Dates({ onTab }: { onTab: (t: Tab) => void }) {
   const doc = useDoc();
   const dates = useMemo(() => live(doc.dates).sort((a, b) => a.date.localeCompare(b.date)), [doc.dates]);
-  const venues = live(doc.venues);
   const [date, setDate] = useState('');
   const [label, setLabel] = useState('');
 
@@ -83,20 +82,10 @@ export function Dates({ onTab }: { onTab: (t: Tab) => void }) {
 
       {dates.length === 0 ? (
         <Empty icon={<CalendarDays className="size-6" />} title="Ancora nessuna data" body="Aggiungi ogni data che prendereste in considerazione, poi segna quali location sono libere, ve la tengono in opzione o sono già occupate." />
-      ) : venues.length === 0 ? (
-        <Empty
-          icon={<CalendarDays className="size-6" />}
-          title="Aggiungi le location per seguirne la disponibilità"
-          action={
-            <Button variant="primary" onClick={() => onTab('venues')}>
-              Vai alle location
-            </Button>
-          }
-        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {dates.map((d) => (
-            <DateCard key={d.id} doc={doc} date={d} />
+            <DateCard key={d.id} doc={doc} date={d} onTab={onTab} />
           ))}
         </div>
       )}
@@ -104,7 +93,7 @@ export function Dates({ onTab }: { onTab: (t: Tab) => void }) {
   );
 }
 
-function DateCard({ doc, date }: { doc: Doc; date: WeddingDate }) {
+function DateCard({ doc, date, onTab }: { doc: Doc; date: WeddingDate; onTab: (t: Tab) => void }) {
   const venues = live(doc.venues);
   const free = venues.filter((v) => ['available', 'held', 'booked'].includes(getAvail(doc, v.id, date.id)?.status ?? '')).length;
   const days = daysUntil(date.date);
@@ -130,13 +119,21 @@ function DateCard({ doc, date }: { doc: Doc; date: WeddingDate }) {
         <button
           aria-label="Rimuovi data"
           title="Rimuovi data"
-          onClick={() => window.confirm(`Rimuovere ${shortDate(date.date)}?`) && remove('dates', date.id)}
+          onClick={() => confirmAction(`Rimuovere la data ${shortDate(date.date)}?`, 'Rimuovi').then((ok) => ok && remove('dates', date.id))}
           className="inline-flex size-9 items-center justify-center rounded-full text-muted transition hover:bg-na-bg hover:text-na"
         >
           <Trash2 className="size-4" />
         </button>
       </div>
       <div className="divide-y divide-line">
+        {venues.length === 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-muted">
+            Aggiungi le location per segnare chi è libero in questa data.
+            <Button size="sm" onClick={() => onTab('venues')}>
+              Vai alle location
+            </Button>
+          </div>
+        )}
         {venues.map((v) => (
           <AvailRow key={v.id} doc={doc} venueId={v.id} dateId={date.id} name={venueName(v)} />
         ))}

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { Ban, Check, CircleHelp, Coins, X } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentProps, type InputHTMLAttributes, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { syncAtBoundary } from '@/lib/drive';
@@ -14,7 +14,7 @@ export function Button({
   size = 'md',
   className,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; size?: 'sm' | 'md' }) {
+}: ComponentProps<'button'> & { variant?: BtnVariant; size?: 'sm' | 'md' }) {
   return (
     <button
       {...props}
@@ -431,10 +431,7 @@ export function Sheet({
   );
 }
 
-// ── Confirm (tiny, inline) ─────────────────
-export function useConfirm() {
-  return (message: string) => window.confirm(message);
-}
+export { confirmAction, ConfirmHost } from './confirm';
 
 export function Stars({ value, onChange, size = 'md' }: { value: number | null; onChange?: (v: number | null) => void; size?: 'sm' | 'md' }) {
   const n = value ?? 0;

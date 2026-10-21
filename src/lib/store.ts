@@ -35,7 +35,13 @@ export function normalize(input: Partial<Doc> | null | undefined): Doc {
 }
 
 let doc: Doc = load();
-let dirty = localStorage.getItem(DIRTY_KEY) === '1';
+let dirty = (() => {
+  try {
+    return localStorage.getItem(DIRTY_KEY) === '1';
+  } catch {
+    return false;
+  }
+})();
 const listeners = new Set<Listener>();
 const changeHooks = new Set<Listener>();
 
