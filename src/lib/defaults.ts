@@ -93,6 +93,8 @@ export function emptyDoc(): Doc {
     dates: [],
     availability: [],
     costs: COSTS.map(([n, c], i) => makeCost(n, c, i, `seed-cost-${i}`)),
+    payments: [],
+    deadlines: [],
     settings: {
       id: 'settings',
       updatedAt: 0,

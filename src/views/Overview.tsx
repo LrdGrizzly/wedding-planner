@@ -1,9 +1,10 @@
 import { motion } from 'motion/react';
-import { ArrowRight, CalendarDays, Hourglass, Landmark, Users, Wallet } from 'lucide-react';
+import { ArrowRight, Banknote, CalendarDays, Hourglass, Landmark, ListChecks, Users, Wallet } from 'lucide-react';
 import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
 import { Card, SectionTitle } from '@/components/ui';
 import { costsSummary, venueSummary } from '@/lib/calc';
-import { money, relDays, shortDate } from '@/lib/format';
+import { upcomingEvents } from '@/lib/contract';
+import { money, relDays, shortDate, tinyDate } from '@/lib/format';
 import { live, useDoc } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { venueName } from './Venues';
@@ -19,6 +20,9 @@ export function Overview({ onOpenVenue, onTab, onSettings }: { onOpenVenue: (id:
   const budget = doc.settings.budget;
   const { remaining, committed } = budgetNumbers(doc);
   const holds = upcomingHolds(doc, 14);
+  const chosen = venues.find((v) => v.id === doc.settings.chosenVenueId);
+  // Payments and tasks for the chosen venue that are late or due within two weeks
+  const urgent = chosen ? upcomingEvents(doc, chosen.id).filter((e) => e.kind !== 'hold' && (e.state === 'overdue' || e.state === 'soon')) : [];
 
   const rows = venues
     .map((v) => {
@@ -82,6 +86,32 @@ export function Overview({ onOpenVenue, onTab, onSettings }: { onOpenVenue: (id:
               ))}
             </ul>
           </div>
+        </Card>
+      )}
+
+      {chosen && urgent.length > 0 && (
+        <Card className="mb-6 p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">Da fare per {venueName(chosen)}</div>
+            <button onClick={() => onTab('contract')} className="inline-flex items-center gap-1 text-sm text-accent hover:underline">
+              Apri il contratto <ArrowRight className="size-4" />
+            </button>
+          </div>
+          <ul className="space-y-2">
+            {urgent.slice(0, 3).map((e) => (
+              <li key={e.id} className="flex items-center gap-2.5 text-sm">
+                {e.kind === 'pay' ? <Banknote className="size-4 shrink-0 text-ink-2" /> : <ListChecks className="size-4 shrink-0 text-ink-2" />}
+                <span className="min-w-0 flex-1 truncate">
+                  {e.title}
+                  {e.kind === 'pay' && e.amount != null && <span className="text-muted"> · {money(e.amount, cur)}</span>}
+                </span>
+                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', e.state === 'overdue' ? 'bg-na-bg text-na' : 'bg-ext-bg text-ext')}>
+                  {e.state === 'overdue' ? `Scaduto ${relDays(e.days ?? 0)}` : e.days === 0 ? 'Scade oggi' : `Scade ${relDays(e.days ?? 0)} (${tinyDate(e.date)})`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {urgent.length > 3 && <p className="mt-2 text-xs text-muted">e altre {urgent.length - 3}</p>}
         </Card>
       )}
 

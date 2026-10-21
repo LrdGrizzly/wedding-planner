@@ -92,6 +92,32 @@ export interface Cost extends Rec {
   order: number;
 }
 
+/** How a payment's amount is worked out: a fixed sum, a share of the contract total, or whatever is left. */
+export type PayMode = 'amount' | 'percent' | 'rest';
+
+/** One instalment owed to the chosen venue (deposit, advance, balance…). Paid when `paidOn` is set. */
+export interface Payment extends Rec {
+  venueId: string;
+  name: string;
+  mode: PayMode;
+  value: number | null; // euros or percent; unused for 'rest'
+  dueDate: string; // yyyy-mm-dd
+  paidOn: string; // yyyy-mm-dd, '' = not paid yet
+  paidAmount: number | null; // what was actually paid (a snapshot, so later price changes don't rewrite history)
+  note: string;
+  order: number;
+}
+
+/** Something to do for the chosen venue by a date (confirm guest count, choose the menu…). */
+export interface Deadline extends Rec {
+  venueId: string;
+  name: string;
+  dueDate: string;
+  doneOn: string; // '' = still to do
+  note: string;
+  order: number;
+}
+
 export interface Settings extends Rec {
   id: 'settings';
   coupleNames: string;
@@ -111,7 +137,9 @@ export interface Doc {
   dates: WeddingDate[];
   availability: Availability[];
   costs: Cost[];
+  payments: Payment[];
+  deadlines: Deadline[];
   settings: Settings;
 }
 
-export type CollectionKey = 'venues' | 'items' | 'offers' | 'dates' | 'availability' | 'costs';
+export type CollectionKey = 'venues' | 'items' | 'offers' | 'dates' | 'availability' | 'costs' | 'payments' | 'deadlines';

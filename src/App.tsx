@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { CalendarDays, Columns3, Home, Landmark, Settings as Gear, Wallet, Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
+import { CalendarDays, Columns3, FileSignature, Home, Landmark, Settings as Gear, Wallet, Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { TransitionPanel } from '@/components/motion-primitives/transition-panel';
 import { cn } from '@/lib/utils';
@@ -9,13 +9,14 @@ import { Venues } from '@/views/Venues';
 import { Compare } from '@/views/Compare';
 import { Dates } from '@/views/Dates';
 import { Budget } from '@/views/Budget';
+import { Contract } from '@/views/Contract';
 import { SettingsSheet } from '@/views/Settings';
 import { ConfirmHost, confirmAction } from '@/components/ui';
 import { replaceDoc, useDoc } from '@/lib/store';
 import { emptyDoc } from '@/lib/defaults';
 import { SYNC_ENABLED } from '@/lib/flags';
 
-export type Tab = 'overview' | 'venues' | 'compare' | 'dates' | 'budget';
+export type Tab = 'overview' | 'venues' | 'compare' | 'dates' | 'budget' | 'contract';
 
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'overview', label: 'Riepilogo', icon: Home },
@@ -23,6 +24,7 @@ const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'compare', label: 'Confronto', icon: Columns3 },
   { id: 'dates', label: 'Date', icon: CalendarDays },
   { id: 'budget', label: 'Budget', icon: Wallet },
+  { id: 'contract', label: 'Contratto', icon: FileSignature },
 ];
 
 function readTab(): Tab {
@@ -117,13 +119,14 @@ export default function App() {
             <Compare key="c" onOpenVenue={goVenue} onTab={setTab} />,
             <Dates key="d" onTab={setTab} />,
             <Budget key="b" onSettings={() => setSettingsOpen(true)} />,
+            <Contract key="k" onOpenVenue={goVenue} onTab={setTab} />,
           ]}
         </TransitionPanel>
       </main>
 
       {/* Phone tab bar */}
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/92 backdrop-blur-md md:hidden" aria-label="Sezioni">
-        <div className="mx-auto grid max-w-md grid-cols-5 px-2 pt-1.5 pb-1">
+        <div className="mx-auto grid max-w-md grid-cols-6 px-1 pt-1.5 pb-1">
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;

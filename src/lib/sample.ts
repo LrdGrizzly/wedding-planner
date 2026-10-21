@@ -1,5 +1,13 @@
 import { emptyDoc } from './defaults';
-import type { Availability, AvailStatus, Cost, Doc, ItemStatus, Offer, TaxMode, Unit, Venue } from './types';
+import type { Availability, AvailStatus, Cost, Deadline, Doc, ItemStatus, Offer, Payment, TaxMode, Unit, Venue } from './types';
+
+/** yyyy-mm-dd, n days from today (negative = past). Keeps example deadlines meaningful whenever the page is opened. */
+const inDays = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const pad = (x: number) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 /* Example data for the test build: four invented locations, priced for 65
    guests, that differ in what they include so the comparison has something
@@ -67,7 +75,7 @@ const VENUES: { v: Omit<Venue, 'id' | 'updatedAt' | 'order'>; rows: Row[]; avail
     avail: [
       [0, 'unavailable'],
       [1, 'available'],
-      [2, 'held', '2026-12-01'],
+      [2, 'held', inDays(41)],
     ],
   },
   {
@@ -118,7 +126,7 @@ const VENUES: { v: Omit<Venue, 'id' | 'updatedAt' | 'order'>; rows: Row[]; avail
       ex(28, 300, 'flat', IVA22),
     ],
     avail: [
-      [0, 'held', '2026-10-28'],
+      [0, 'held', inDays(7)],
       [1, 'available'],
       [2, 'unavailable'],
     ],
@@ -226,7 +234,7 @@ const VENUES: { v: Omit<Venue, 'id' | 'updatedAt' | 'order'>; rows: Row[]; avail
     ],
     avail: [
       [0, 'available'],
-      [1, 'held', '2026-11-15'],
+      [1, 'held', inDays(25)],
       [2, 'available'],
     ],
   },
@@ -245,6 +253,25 @@ const COSTS: [number, number | null, Cost['status'], number | null, number | nul
   [2, 320, 'quoted', 22, null], // Trucco e parrucco sposa
   [3, 90, 'quoted', null, null], // Braccialetti damigelle
   [5, 1800, 'quoted', 22, null], // Fotografo
+];
+
+// The example "chosen" venue is Masseria del Sole (sample-v3).
+// [name, mode, value, due in days, paid n days ago]
+const PAYMENTS: [string, Payment['mode'], number | null, number, number | null][] = [
+  ['Caparra di blocco data', 'amount', 1000, -9, 9],
+  ['Primo acconto', 'percent', 25, 12, null],
+  ['Secondo acconto', 'percent', 25, 120, null],
+  ['Saldo', 'rest', null, 235, null],
+];
+
+// [name, due in days, done n days ago]
+const TASKS: [string, number, number | null][] = [
+  ['Firma del contratto', -3, null],
+  ['Scelta del menù', 150, null],
+  ['Prova del menù', 175, null],
+  ['Consegna della lista fornitori', 200, null],
+  ['Conferma del numero di invitati', 215, null],
+  ['Visita di sopralluogo', -6, 5],
 ];
 
 export function sampleDoc(): Doc {
@@ -288,6 +315,16 @@ export function sampleDoc(): Doc {
     Object.assign(c, { amount, status, taxMode: tax ? 'percent' : 'none', taxValue: tax, paid, updatedAt: now });
   }
 
-  doc.settings = { ...doc.settings, coupleNames: 'Ale e Je', budget: 32000, chosenVenueId: null, isSample: true, updatedAt: now };
+  const chosen = 'sample-v3';
+  PAYMENTS.forEach(([name, mode, value, due, paidAgo], i) => {
+    const p: Payment = { id: `sample-pay${i}`, updatedAt: now, venueId: chosen, name, mode, value, dueDate: inDays(due), paidOn: paidAgo != null ? inDays(-paidAgo) : '', paidAmount: paidAgo != null ? value : null, note: '', order: i };
+    doc.payments.push(p);
+  });
+  TASKS.forEach(([name, due, doneAgo], i) => {
+    const t: Deadline = { id: `sample-dl${i}`, updatedAt: now, venueId: chosen, name, dueDate: inDays(due), doneOn: doneAgo != null ? inDays(-doneAgo) : '', note: '', order: i };
+    doc.deadlines.push(t);
+  });
+
+  doc.settings = { ...doc.settings, coupleNames: 'Ale e Je', budget: 32000, chosenVenueId: chosen, isSample: true, updatedAt: now };
   return doc;
 }

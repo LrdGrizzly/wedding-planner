@@ -33,6 +33,8 @@ export function normalize(input: Partial<Doc> | null | undefined): Doc {
     dates: arr(input.dates, []),
     availability: arr(input.availability, []),
     costs: arr(input.costs, base.costs),
+    payments: arr(input.payments, []),
+    deadlines: arr(input.deadlines, []),
     settings: { ...base.settings, ...(input.settings || {}), id: 'settings' },
   };
 }
@@ -138,7 +140,7 @@ export function setSettings(changes: Partial<Settings>) {
   commit({ ...doc, settings: { ...doc.settings, ...changes, id: 'settings', updatedAt: Date.now() } });
 }
 
-/** Remove a venue together with its offers and availability rows. */
+/** Remove a venue together with its offers, availability, payments and deadlines. */
 export function removeVenue(venueId: string) {
   const now = Date.now();
   const kill = <T extends Rec & { venueId: string }>(list: T[]) =>
@@ -148,6 +150,8 @@ export function removeVenue(venueId: string) {
     venues: doc.venues.map((v) => (v.id === venueId ? { ...v, deleted: true, updatedAt: now } : v)),
     offers: kill(doc.offers),
     availability: kill(doc.availability),
+    payments: kill(doc.payments),
+    deadlines: kill(doc.deadlines),
     settings:
       doc.settings.chosenVenueId === venueId
         ? { ...doc.settings, chosenVenueId: null, updatedAt: now }
@@ -179,6 +183,8 @@ export function mergeDocs(local: Doc, remote: Doc): Doc {
     dates: mergeList(l.dates, r.dates),
     availability: mergeList(l.availability, r.availability),
     costs: mergeList(l.costs, r.costs),
+    payments: mergeList(l.payments, r.payments),
+    deadlines: mergeList(l.deadlines, r.deadlines),
     settings: (r.settings.updatedAt || 0) > (l.settings.updatedAt || 0) ? r.settings : l.settings,
   };
 }
@@ -197,6 +203,8 @@ export function fingerprint(d: Doc) {
     sig(d.dates),
     sig(d.availability),
     sig(d.costs),
+    sig(d.payments),
+    sig(d.deadlines),
     d.settings.updatedAt,
   ].join('#');
 }
