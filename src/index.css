@@ -1,0 +1,167 @@
+@import 'tailwindcss';
+
+/* Colour tokens: warm ivory paper, deep sage ink, champagne accent.
+   Status colours carry meaning everywhere: sage = included,
+   amber = extra cost, rose = not offered, stone = not asked yet. */
+:root {
+  --bg: #fbf8f3;
+  --surface: #ffffff;
+  --surface-2: #f5f0e8;
+  --border: #e9e1d4;
+  --border-strong: #d8ccb9;
+  --ink: #24201b;
+  --ink-2: #5c544a;
+  --muted: #8a8174;
+  --accent: #4d6a50;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4ece2;
+  --gold: #a9843f;
+  --gold-soft: #f4ead4;
+
+  --inc: #3f7347;
+  --inc-bg: #e3efe1;
+  --ext: #93621a;
+  --ext-bg: #f7ead0;
+  --na: #a2423b;
+  --na-bg: #f6e0dc;
+  --unk: #8a8174;
+  --unk-bg: #f1ece4;
+  --held: #6a5aa0;
+  --held-bg: #ebe7f6;
+
+  --shadow: 0 1px 2px rgb(60 45 20 / 0.05), 0 4px 16px -4px rgb(60 45 20 / 0.08);
+  --shadow-lg: 0 10px 40px -10px rgb(40 30 10 / 0.25);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14120f;
+    --surface: #1d1a16;
+    --surface-2: #26221d;
+    --border: #2f2a23;
+    --border-strong: #423b31;
+    --ink: #f1ebe2;
+    --ink-2: #c4bbad;
+    --muted: #8f8677;
+    --accent: #9bbd99;
+    --accent-ink: #14120f;
+    --accent-soft: #263325;
+    --gold: #d6b56f;
+    --gold-soft: #3a311f;
+
+    --inc: #9fd0a2;
+    --inc-bg: #1f3321;
+    --ext: #e8bf73;
+    --ext-bg: #3a2d14;
+    --na: #ee9a92;
+    --na-bg: #3d1f1c;
+    --unk: #9a9184;
+    --unk-bg: #2a2621;
+    --held: #b7a9ec;
+    --held-bg: #2b2640;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px -4px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 40px -10px rgb(0 0 0 / 0.7);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-inc: var(--inc);
+  --color-inc-bg: var(--inc-bg);
+  --color-ext: var(--ext);
+  --color-ext-bg: var(--ext-bg);
+  --color-na: var(--na);
+  --color-na-bg: var(--na-bg);
+  --color-unk: var(--unk);
+  --color-unk-bg: var(--unk-bg);
+  --color-held: var(--held);
+  --color-held-bg: var(--held-bg);
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-lg);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+@layer base {
+/* iOS zooms into inputs under 16px; keep form text at 16px on touch screens */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+@media (min-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
+}
+
+input[type='date']::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+@media (prefers-color-scheme: dark) {
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+}
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hatch {
+  background-image: repeating-linear-gradient(-45deg, transparent 0 5px, color-mix(in srgb, var(--na) 10%, transparent) 5px 6px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
