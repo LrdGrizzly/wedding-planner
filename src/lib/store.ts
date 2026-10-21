@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { emptyDoc } from './defaults';
+import { SAMPLE_ENABLED } from './flags';
+import { sampleDoc } from './sample';
 import type { CollectionKey, Doc, Rec, Settings } from './types';
 
 const DOC_KEY = 'wp_doc';
@@ -14,7 +16,8 @@ function load(): Doc {
   } catch {
     /* corrupt or blocked storage: start fresh */
   }
-  return emptyDoc();
+  // First visit to the test build: show example locations (cleared from the banner)
+  return SAMPLE_ENABLED ? sampleDoc() : emptyDoc();
 }
 
 /** Fill in anything a doc from an older build (or a hand-edited file) lacks. */

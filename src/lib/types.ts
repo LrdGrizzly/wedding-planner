@@ -99,6 +99,8 @@ export interface Settings extends Rec {
   currency: string;
   budget: number | null;
   chosenVenueId: string | null;
+  /** True while the example data is loaded (test build only); shows a banner. */
+  isSample?: boolean;
 }
 
 export interface Doc {

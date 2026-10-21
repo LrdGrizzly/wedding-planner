@@ -10,7 +10,9 @@ import { Compare } from '@/views/Compare';
 import { Dates } from '@/views/Dates';
 import { Budget } from '@/views/Budget';
 import { SettingsSheet } from '@/views/Settings';
-import { ConfirmHost } from '@/components/ui';
+import { ConfirmHost, confirmAction } from '@/components/ui';
+import { replaceDoc, useDoc } from '@/lib/store';
+import { emptyDoc } from '@/lib/defaults';
 import { SYNC_ENABLED } from '@/lib/flags';
 
 export type Tab = 'overview' | 'venues' | 'compare' | 'dates' | 'budget';
@@ -97,6 +99,8 @@ export default function App() {
         </div>
       </header>
 
+      <SampleBanner />
+
       <main className="mx-auto max-w-6xl px-4 pt-5 pb-28 md:px-6 md:pt-8 md:pb-16">
         <TransitionPanel
           activeIndex={index}
@@ -141,6 +145,28 @@ export default function App() {
 
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ConfirmHost />
+    </div>
+  );
+}
+
+function SampleBanner() {
+  const doc = useDoc();
+  if (!doc.settings.isSample) return null;
+  return (
+    <div className="border-b border-held/25 bg-held-bg/60">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 text-[13px] md:px-6">
+        <span className="text-ink-2">
+          <b className="font-medium text-held">Dati di esempio.</b> Quattro location inventate per provare l'app.
+        </span>
+        <button
+          onClick={() =>
+            confirmAction('Cancellare i dati di esempio e ricominciare da zero? Eliminerà anche quello che hai modificato.', 'Cancella').then((ok) => ok && replaceDoc(emptyDoc()))
+          }
+          className="font-medium text-held underline underline-offset-2 hover:text-ink"
+        >
+          Cancella e inizia da zero
+        </button>
+      </div>
     </div>
   );
 }

@@ -10,7 +10,8 @@ import { getDoc, live, mergeDocs, normalize, patch, remove, replaceDoc, setSetti
 import type { GroupId, Unit } from '@/lib/types';
 import { cn, uid } from '@/lib/utils';
 import { useDrive } from '@/App';
-import { SYNC_ENABLED } from '@/lib/flags';
+import { SAMPLE_ENABLED, SYNC_ENABLED } from '@/lib/flags';
+import { sampleDoc } from '@/lib/sample';
 
 const CURRENCIES = ['EUR', 'GBP', 'USD', 'CHF', 'AUD', 'CAD', 'SEK', 'DKK', 'NOK', 'PLN'];
 
@@ -51,6 +52,8 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         <ChecklistEditor />
 
         <BackupSection />
+
+        {SAMPLE_ENABLED && <SampleSection />}
 
         <p className="text-center text-xs text-muted">
           Salvato su questo dispositivo{SYNC_ENABLED && getConfig().clientId ? ' e su Google Drive' : ''}
@@ -364,6 +367,22 @@ function ChecklistEditor() {
           </motion.div>
         )}
       </AnimatePresence>
+    </section>
+  );
+}
+
+// ── Example data (test build only) ─────────
+function SampleSection() {
+  return (
+    <section className="space-y-3">
+      <H>Dati di esempio</H>
+      <p className="text-sm text-ink-2">Carica quattro location inventate, con prezzi, date e disponibilità diversi, per vedere come funziona il confronto. Sostituisce ciò che hai inserito ora.</p>
+      <Button
+        size="sm"
+        onClick={() => confirmAction("Sostituire tutto con i dati di esempio? Quello che hai inserito andrà perso.", 'Sostituisci').then((ok) => ok && replaceDoc(sampleDoc()))}
+      >
+        Carica i dati di esempio
+      </Button>
     </section>
   );
 }
